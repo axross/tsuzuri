@@ -1,4 +1,4 @@
-# {{PROJECT_NAME}}
+# tsuzuri
 
 <!-- INIT: this file is the SEED for the initialized project's README. During
 INIT Step 7, finalize it: `git mv -f README.template.md README.md` (replacing
@@ -8,7 +8,7 @@ from the Stack Decision Record and the Step-1 interview answers, resolve every
 `INIT:OPTIONAL` marker below, and delete all `INIT` comments — including this
 one. -->
 
-{{PROJECT_OVERVIEW}}
+A web application that treats a GitHub repository a user has linked to it as the blog's backend, formatting and serving the posts, media, and metadata it holds.
 
 <!-- INIT: expand the one-liner above into a short paragraph from the Step-1
 interview — what the project is, who it serves, and its current goal. -->
@@ -17,14 +17,14 @@ interview — what the project is, who it serves, and its current goal. -->
 
 | Area | Tool |
 | ---- | ---- |
-| Language | {{PRIMARY_LANGUAGE}} |
-| App framework / runtime | {{APP_FRAMEWORK}} |
-| Package manager | {{PACKAGE_MANAGER}} |
-| Linting & formatting | {{LINTER}} / {{FORMATTER}} |
-| Unit tests | {{UNIT_TEST_FRAMEWORK}} <!-- INIT:OPTIONAL key=UNIT_TESTS — fill the token OR delete this row if the project has no unit suite. --> |
-| E2E tests | {{E2E_TEST_FRAMEWORK}} <!-- INIT:OPTIONAL key=E2E_TESTS — fill the token OR delete this row if the project has no e2e suite. --> |
-| Data / content layer | {{CMS_OR_DATA_LAYER}} <!-- INIT:OPTIONAL key=DATA_LAYER — fill the token OR delete this row if the project has no data/content layer. --> |
-| Hosting | {{HOSTING_PLATFORM}} <!-- INIT:OPTIONAL key=HOSTING — fill the token OR delete this row if the project has no hosting platform yet. --> |
+| Language | TypeScript |
+| App framework / runtime | Next.js |
+| Package manager | npm |
+| Linting & formatting | Biome / Biome |
+| Unit tests | Vitest <!-- INIT:OPTIONAL key=UNIT_TESTS — fill the token OR delete this row if the project has no unit suite. --> |
+| E2E tests | Playwright <!-- INIT:OPTIONAL key=E2E_TESTS — fill the token OR delete this row if the project has no e2e suite. --> |
+| Data / content layer | the linked GitHub repository, read and written through the GitHub API <!-- INIT:OPTIONAL key=DATA_LAYER — fill the token OR delete this row if the project has no data/content layer. --> |
+| Hosting | Vercel <!-- INIT:OPTIONAL key=HOSTING — fill the token OR delete this row if the project has no hosting platform yet. --> |
 
 <!-- INIT: add rows a newcomer needs from the Stack Decision Record (state
 management, styling, ORM/db wrapper, error tracker, logger, …); keep the table
@@ -32,11 +32,11 @@ to what the project actually uses. -->
 
 ## Getting started
 
-1. Install dependencies: `{{INSTALL_CMD}}`
-2. Start developing: `{{DEV_CMD}}`
+1. Install dependencies: `npm install`
+2. Start developing: `npm run dev`
    <!-- INIT: for a project without a dev server (CLI, library), reword this
    step to the project's run/watch equivalent. -->
-3. Production build and start: `{{BUILD_CMD}}`, then `{{START_CMD}}`
+3. Production build and start: `npm run build`, then `npm run start`
    <!-- INIT:OPTIONAL key=BUILD_STEP — keep and fill OR delete this step if the project has no build step. -->
 
 <!-- INIT: add the real prerequisites — runtime/toolchain version, `.env.local`
@@ -122,11 +122,11 @@ tests cover versus e2e, and which checks gate a merge. -->
 
 | Check | Command |
 | ----- | ------- |
-| Format | `{{FORMAT_CMD}}` |
-| Lint | `{{LINT_CMD}}` |
-| Type-check | `{{TYPECHECK_CMD}}` <!-- INIT:OPTIONAL key=TYPED_LANGUAGE — delete this row for an untyped language. --> |
-| Unit tests | `{{UNIT_TEST_CMD}}` <!-- INIT:OPTIONAL key=UNIT_TESTS — delete this row if the project has no unit suite. --> |
-| E2E tests | `{{E2E_TEST_CMD}}` <!-- INIT:OPTIONAL key=E2E_TESTS — delete this row if the project has no e2e suite. --> |
+| Format | `npm run format` |
+| Lint | `npm run lint` |
+| Type-check | `npm run typecheck` <!-- INIT:OPTIONAL key=TYPED_LANGUAGE — delete this row for an untyped language. --> |
+| Unit tests | `npm run test:unit` <!-- INIT:OPTIONAL key=UNIT_TESTS — delete this row if the project has no unit suite. --> |
+| E2E tests | `npm run test:e2e` <!-- INIT:OPTIONAL key=E2E_TESTS — delete this row if the project has no e2e suite. --> |
 
 This table is the authoritative list of the project's commands, for human
 contributors and agents alike. Run format and lint after every change, and the

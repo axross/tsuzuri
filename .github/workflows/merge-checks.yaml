@@ -65,10 +65,10 @@ jobs:
           cache: npm
       - name: Dependency Installation
         if: steps.adapted.outputs.run == 'true'
-        run: "{{INSTALL_CMD}}"
+        run: "npm install"
       - name: Lint
         if: steps.adapted.outputs.run == 'true'
-        run: "{{LINT_CMD}}"
+        run: "npm run lint"
 
   test:
     name: Unit Tests
@@ -93,7 +93,7 @@ jobs:
           cache: npm
       - name: Dependency Installation
         if: steps.adapted.outputs.run == 'true'
-        run: "{{INSTALL_CMD}}"
+        run: "npm install"
       - name: Unit Test Run
         if: steps.adapted.outputs.run == 'true'
-        run: "{{UNIT_TEST_CMD}}"
+        run: "npm run test:unit"

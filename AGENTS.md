@@ -10,10 +10,10 @@
 
 ## Project Overview
 
-- **{{PROJECT_NAME}}** is a {{PROJECT_KIND}}. {{PROJECT_OVERVIEW}}
-- Primary language: {{PRIMARY_LANGUAGE}}. App framework: {{APP_FRAMEWORK}}.
-- Tooling: {{PACKAGE_MANAGER}} for packages, {{LINTER}} for linting,
-  {{FORMATTER}} for formatting.
+- **tsuzuri** is a web app. A web application that treats a GitHub repository a user has linked to it as the blog's backend, formatting and serving the posts, media, and metadata it holds.
+- Primary language: TypeScript. App framework: Next.js.
+- Tooling: npm for packages, Biome for linting,
+  Biome for formatting.
 - [README.md](./README.md) is the authoritative record of this project's
   run-script commands. It is not a skill, so skill discovery never surfaces it
   on its own.

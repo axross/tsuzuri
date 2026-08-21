@@ -18,7 +18,7 @@ FILE_PATH="$(jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
 # rest. the case-pattern below is the CODE_FILE_GLOB token, e.g.
 # "*.ts | *.tsx | *.js | *.css".
 case "$FILE_PATH" in
-  {{CODE_FILE_GLOB}}) ;;
+  *.ts | *.tsx | *.js | *.jsx | *.css | *.json) ;;
   *) exit 0 ;;
 esac
 
@@ -33,7 +33,7 @@ fi
 
 # skip silently when the package manager is unavailable (e.g. a local shell
 # without the toolchain provisioned).
-command -v {{PACKAGE_MANAGER}} >/dev/null 2>&1 || exit 0
+command -v npm >/dev/null 2>&1 || exit 0
 
-{{FORMAT_CMD}} >/dev/null 2>&1 || true
+npm run format >/dev/null 2>&1 || true
 exit 0
