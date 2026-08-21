@@ -36,8 +36,13 @@ function optional<Schema extends z.ZodTypeAny>(schema: Schema) {
 }
 
 const envSchema = z.object({
-	/** Server- and edge-side Sentry DSN. Unset keeps Sentry inert. */
-	SENTRY_DSN: optional(z.string().url()),
+	/**
+	 * Server- and edge-side Sentry DSN. Unset keeps Sentry inert.
+	 *
+	 * `z.httpUrl()` rather than `z.url()`: the SDK fetches this address, and
+	 * `z.url()` would admit schemes that are not safe to follow.
+	 */
+	SENTRY_DSN: optional(z.httpUrl()),
 	/** Pino root logger level. Defaults to "info" when unset. */
 	LOG_LEVEL: optional(z.enum(["debug", "info", "warn", "error"])),
 });

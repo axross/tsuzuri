@@ -29,6 +29,14 @@ describe("parseEnv", () => {
 		it("rejects a value that is not a URL", () => {
 			expect(() => parseEnv({ SENTRY_DSN: "not-a-url" })).toThrow();
 		});
+
+		it("rejects a URL whose scheme is not HTTP or HTTPS", () => {
+			// The SDK fetches this address, so a parseable URL is not enough —
+			// only a scheme that is safe to follow passes.
+			expect(() =>
+				parseEnv({ SENTRY_DSN: "ftp://key@o0.ingest.sentry.io/1" }),
+			).toThrow();
+		});
 	});
 
 	describe("when LOG_LEVEL is invalid", () => {
