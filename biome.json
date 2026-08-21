@@ -11,7 +11,6 @@
 			"src/**",
 			"e2e/**",
 			"messages/**",
-			"middleware.ts",
 			"next.config.ts",
 			"next-env.d.ts",
 			"instrumentation.ts",
