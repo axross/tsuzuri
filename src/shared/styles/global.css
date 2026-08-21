@@ -1,0 +1,35 @@
+@layer base {
+	/*
+	 * Every selector below is wrapped in `:where()` so it contributes no
+	 * specificity: a component's single class is always enough to override a
+	 * global, without the layer order being the only thing standing between
+	 * them.
+	 */
+	:where(*, *::before, *::after) {
+		box-sizing: border-box;
+	}
+
+	:where(*) {
+		margin: 0;
+	}
+
+	:where(html) {
+		color-scheme: var(--color-scheme);
+	}
+
+	:where(body) {
+		min-height: 100dvh;
+		background-color: var(--color-background);
+		color: var(--color-foreground);
+		font-family: var(--text-body-family);
+		font-size: var(--text-body-size);
+		font-weight: var(--text-body-weight);
+		line-height: var(--text-body-line-height);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	:where(img, picture, svg) {
+		display: block;
+		max-width: 100%;
+	}
+}

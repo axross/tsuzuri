@@ -1,0 +1,12 @@
+/*
+ * The cascade layer order for the whole project, declared once and imported
+ * before anything that populates a layer. Order is fixed by this statement
+ * rather than by which stylesheet loads first, which is the point: a component
+ * beats a global rule because of where it sits here, not because of import
+ * order somebody could reshuffle.
+ *
+ * Every rule in this project belongs to one of these three. A rule left outside
+ * every layer outranks all of them, which inverts the order silently — so
+ * "unlayered" is never a valid state, not even for one declaration.
+ */
+@layer variables, base, components;

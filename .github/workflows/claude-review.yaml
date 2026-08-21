@@ -1,12 +1,5 @@
 name: Claude Code Review
 
-# INIT:OPTIONAL key=INDEPENDENT_REVIEW — Fixed GitHub-Actions + Claude Code
-# workflow, part of the fixed independent-review channel. INIT KEEPS this file
-# (never deletes it), see INIT.md Step 4. Just delete this marker and configure
-# it — set the review trigger phrase and reviewer identity, and adapt the
-# toolchain setup. A project that wants no automated review disables the
-# workflow triggers rather than deleting the file.
-#
 # Independent pull-request review. Runs as a separate Claude Code session on a
 # GitHub-hosted runner — a different session, on different infrastructure,
 # under a bot identity distinct from the connected operator — triggered by a

@@ -1,132 +1,158 @@
-# Claude Loop Engineering Template
+# tsuzuri
 
-A reusable, **framework-agnostic** starting point for giving **Claude Code** a
-structured working agreement, a library of installed skills, and a change loop
-that cannot approve its own work.
+A web application that treats a GitHub repository a user has linked to it as
+the blog's backend, formatting and serving the posts, media, and metadata it
+holds.
 
-It is extracted from a production setup and stripped of stack-specific detail,
-leaving a generic core you adapt to any project — web, mobile, CLI, library, or
-service.
+Posts are Markdown files with front matter, media are ordinary files committed
+beside them, and both live in the author's own repository rather than in a
+database we operate. The application reads that repository through a companion
+GitHub App, serves the blog from its own cache, writes authored changes back as
+commits, and carries reader comments on GitHub Discussions under each reader's
+own GitHub identity. There is no persistence layer of its own: everything
+outside the linked repository is derived, and can be rebuilt from it.
 
-## What's inside
+The repository is currently at its starting point — the toolchain, the
+constraints, and the decisions are in place; the product behaviour is not.
 
-```
-.
-├── INIT.md                  # how to adapt this template (start here)
-├── init.sh                  # metacharacter-safe {{TOKEN}} substitution + gates
-├── tokens.json              # machine-readable manifest of every {{TOKEN}}
-├── README.template.md       # seed for the initialized project's README (finalized in INIT Step 7)
-├── .gitignore               # ignores settings.local.json + .env.local (see INIT Step 6)
-├── AGENTS.md                # working agreement + the Routing a Change table
-├── CLAUDE.md                # @AGENTS.md + the Claude-Code-specific half
-├── REVIEW.md                # fixed: posted-review policy for the independent-review channel
-├── skills-lock.json         # what is installed under .claude/skills/, and from where
-├── docs/                    # this project's own knowledge — index, conventions, operations, decisions
-├── .github/
-│   └── workflows/           # fixed: CI reviewer, merge checks, branch-governance audit;
-│                            # plus template-checks.yaml, this repo's own CI (deleted during INIT)
-└── .claude/
-    ├── skills/              # 17 skills INSTALLED from axross/skills — generated, never hand-edited
-    ├── agents/              # implementer + reviewer + investigator subagent definitions
-    ├── hooks/               # session-start (always on), format + check (opt-in)
-    ├── settings.json        # SessionStart hook, default effort level, telemetry tagging
-    └── settings.local-example.json  # opt-in: copied to settings.local.json by session-start
-```
+## Tech stack
 
-### The skills are installed, not authored here
-
-Every directory under `.claude/skills/` comes from
-[axross/skills](https://github.com/axross/skills) via the
-[vercel-labs/skills](https://github.com/vercel-labs/skills) CLI, pinned by
-`skills-lock.json`. They are generated artifacts: a hand-edit is silently
-discarded by the next install, so a change goes upstream as an issue or pull
-request there. [docs/operations/agent-skills.md](./docs/operations/agent-skills.md)
-holds the refresh command and the register for a rule that turns out to be
-wrong or to collide with your project.
-
-The template installs the 17 that apply to any project whatever its stack —
-conduct, the change loop, baseline development, commits, GitHub operation,
-review, QA, maintainability, security, instrumentation, unit and e2e testing,
-requirements, technical writing, the docs tree, and skill authoring and
-management. The stack-specific rest of the library — framework, UI, vendor, and
-runner layers — is chosen during adaptation, in INIT Step 4.
-
-**This costs a Node dependency**, and it is worth naming: `npx skills` needs
-Node and network access to install or refresh. The installed skills themselves
-are plain Markdown, so nothing at run time needs Node — only refreshing does,
-plus the two checkers `init.sh check` calls.
-
-### The loop, and what holds it in place
-
-`loop-engineering` drives every change through **plan → approve → code → verify
-→ independent review → address → ready**. It is model-invoked: there is no
-slash command, and describing the work is what enters it.
-
-Three things keep it from collapsing into self-approval:
-
-- **`REVIEW.md` plus the CI reviewer**
-  ([`claude-review.yaml`](./.github/workflows/claude-review.yaml)) — the review
-  runs as a separate session under a separate identity, so the author never
-  certifies its own work.
-- **`.claude/agents/reviewer.md`** — an advisory pre-flight read before the pull
-  request opens, by something other than the writer. Delete it and the stage is
-  skipped rather than done by the author.
-- **[`branch-governance-audit.yaml`](./.github/workflows/branch-governance-audit.yaml)** —
-  an hourly sweep for an agent branch pushed ahead of the default branch with no
-  open pull request. It runs outside the agent's session, which is the point:
-  the prose rules are read inside the very session that would be skipping them.
-
-### Project knowledge goes in `docs/`, not in skills
-
-The template ships `docs/index.md`, three `operations/` documents, one
-`conventions/` document, and two decision records, in the shape
-`living-project-documentation` defines — `specs/`, `conventions/`,
-`operations/`, and `decisions/`. The `conventions/` document is the one
-exception to writing `docs/` during adaptation: it states what is true of
-every repository created from this template, and nothing else under
-`conventions/` can be, so it ships already written rather than waiting for
-INIT Step 5. INIT Step 5 grows the rest. It does **not** ship empty
-directories: an empty document is indistinguishable from a subject nobody has
-considered.
-
-The trade-off is discovery, and it is real. A skill loads because its
-`description` matched; a document loads only because `AGENTS.md` said to read
-it. That is why `AGENTS.md` carries a **Routing a Change** table naming a
-specific document per kind of change, and why adding a document means adding
-its row.
+| Area | Tool |
+| ---- | ---- |
+| Language | TypeScript |
+| App framework / runtime | Next.js (App Router) |
+| Package manager | npm |
+| Linting & formatting | Biome (both) |
+| Unit tests | Vitest |
+| E2E tests | Playwright |
+| Data / content layer | the linked GitHub repository, read and written through the GitHub API |
+| Hosting | Vercel |
+| Client state | Zustand |
+| Validation | Zod |
+| Styling | CSS Modules |
+| Theming | CSS variables over Radix Colors |
+| Components | Base UI (headless), composed with clsx |
+| Internationalization | next-intl — one locale, `en`, structured to extend |
+| Error tracking | Sentry |
+| Logging | Pino, to stdout, read by Vercel Runtime Logs |
 
 ## Getting started
 
-This repository is a GitHub **template repository**, so you start from a copy of
-it rather than cloning it.
+Node is pinned in [`.nvmrc`](./.nvmrc); use a version manager that reads it, or
+match it by hand.
 
-1. Get the template into your repository:
-   - **New repository** — on GitHub, click **Use this template → Create a new
-     repository**. Your repository starts as a copy of this one, so everything
-     below is already in place. Skip to step 2.
-   - **Existing repository** — copy the template's files in: the adaptation
-     tooling (`INIT.md`, `init.sh`, `tokens.json`), the README seed
-     (`README.template.md`), the working agreement and harness (`AGENTS.md`,
-     `CLAUDE.md`, `.claude/`, `.gitignore`), the installed skills and their
-     lockfile (`.claude/skills/`, `skills-lock.json`), `docs/`, and the fixed
-     `.github/` and `REVIEW.md`.
-2. Open **[INIT.md](./INIT.md)** and follow it — or hand the repo to Claude Code
-   and ask it to "run INIT". INIT reconciles any files a scaffold already
-   generated, interviews you about the project kind, frameworks, architecture,
-   and goal, fills the `{{TOKENS}}` via `./init.sh`, installs the
-   stack-specific skills your stack needs, and writes `docs/`.
-3. When adaptation is complete, INIT finalizes `README.template.md` into your
-   project's `README.md`, replacing this one, and deletes the INIT tooling.
-4. **Enable the CI reviewer.** The independent-review channel's GitHub Actions
-   reviewer needs a one-time operator setup before it runs: install the
-   [Claude GitHub App](https://github.com/apps/claude) and add a
-   `CLAUDE_CODE_OAUTH_TOKEN` repository secret — generate it locally with
-   `claude setup-token` — under **Settings → Secrets and variables → Actions**,
-   or set an `ANTHROPIC_API_KEY` secret instead for pay-as-you-go API billing.
-   Until one of them is in place the workflow no-ops, and **its silence looks
-   exactly like a clean review**. The workflow file's header comment documents
-   the exact steps.
+1. Install dependencies: `npm install`
+2. Start developing: `npm run dev`
+3. Production build and start: `npm run build`, then `npm run start`
 
-Placeholders use the `{{TOKEN}}` convention so they are easy to find and
-replace; the full token list lives in [`tokens.json`](./tokens.json) and
-[INIT.md](./INIT.md).
+No service, database, or credential is required to run the application
+locally. Every integration is inert until it is configured: with no
+`SENTRY_DSN`, Sentry initializes as a no-op and makes no network call.
+
+Copy [`.env.example`](./.env.example) to `.env.local` to set any of them. That
+file carries variable **names** only — real values never enter the repository,
+and `.gitignore` keeps `.env.local` out. In a cloud agent session
+[`session-start.sh`](./.claude/hooks/session-start.sh) materializes it for you.
+
+Two repository secrets sets are configured by an operator rather than a
+contributor, and both are optional until someone wants what they enable:
+`CLAUDE_CODE_OAUTH_TOKEN` for the CI reviewer (see
+[`claude-review.yaml`](./.github/workflows/claude-review.yaml)), and
+`VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` for preview deployments
+(see
+[docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md)).
+
+## Development workflow
+
+Development in this repository is agent-assisted via
+[Claude Code](https://claude.com/claude-code). The working agreement lives in
+[`AGENTS.md`](./AGENTS.md) (loaded through `CLAUDE.md`), which routes to the
+installed skills under [`.claude/skills/`](./.claude/skills) and to this
+project's own documents under [`docs/`](./docs/index.md). Human and agent
+contributors follow the same loop.
+
+### The change loop
+
+Every change — code or document, one line or one feature — goes through the
+`loop-engineering` skill: **plan → approve → code → verify → independent review
+→ address → ready**.
+
+There is no command to type. The skill is model-invoked, so naming the work is
+what starts it: *"deliver issue #42"*, *"pick up PR 57"*, or a description of a
+change with no issue behind it yet. To carry on after it stops, continue the
+session and tell it to.
+
+1. **Plan** — reads the issue and its thread, asks you the product and scope
+   questions the spec leaves open, and rewrites the issue body into a
+   reviewable plan with acceptance criteria. It then **always stops for your
+   approval**: nothing gets built until you review the plan and resume.
+2. **Code + verify** — implements the approved plan on an agent-namespaced
+   branch (on a separate worktree when it shares your working copy, so it never
+   blocks you), runs the checks the changed surface requires, and self-reviews
+   the diff. Implementation runs in the `implementer` subagent where the
+   harness allows one.
+3. **Independent review** — opens a draft pull request and requests the CI
+   reviewer, a separate session under a separate identity, so the code's author
+   never certifies its own work.
+4. **Address** — fixes review findings and CI failures, tying each resolved
+   thread to the resolving commit, for a capped number of rounds.
+5. **Ready** — flips the pull request to ready once CI is green and the review
+   is clean. Merging always stays a human decision.
+
+[docs/operations/development-workflow.md](./docs/operations/development-workflow.md)
+holds this project's own part: the branch prefix, what audits the loop from
+outside a session, and how the review is requested.
+
+### `@claude review` — get findings on any PR
+
+Comment **`@claude review`** on a pull request to run this repository's review
+policy ([`REVIEW.md`](./REVIEW.md)) — severity-tagged findings with `file:line`
+evidence and concrete fixes, posted as inline comments by the CI reviewer
+([`claude-review.yaml`](./.github/workflows/claude-review.yaml)). Use it for a
+pre-merge check on a hand-written change or a second opinion before merging; it
+is the same reviewer the change loop requests for itself.
+
+### Preview environments — review every PR live
+
+Each pull request gets its own preview deployment behind a **stable per-PR
+link**, posted to the pull request as a fresh comment on every deploy (each
+recording the deployed commit) and torn down when the pull request closes. The
+pipeline is inert until the three Vercel secrets above are configured; see
+[docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md)
+for arming it and for the one case where a preview URL shows something other
+than the branch head.
+
+Changes made without an agent follow the same bar: branch, implement, run the
+checks below, open a pull request, and get it reviewed before merge.
+
+## Testing
+
+Unit tests under Vitest cover the transformations — parsing front matter,
+deriving a media path, building a commit payload, validating configuration —
+and never reach the network. End-to-end tests under Playwright drive a
+production build in Chromium and cover the journeys catalogued in
+[`e2e/scenarios.md`](./e2e/scenarios.md), which is what this project counts
+coverage against rather than a line percentage.
+[docs/conventions/testing.md](./docs/conventions/testing.md) states which suite
+a given test belongs in.
+
+Lint, type-check, and the unit suite gate a merge, alongside a relative-link
+check and the `docs/` validators. The end-to-end suite does not gate; run it
+before opening a pull request that touches a rendered surface.
+
+| Check | Command |
+| ----- | ------- |
+| Format | `npm run format` |
+| Lint | `npm run lint` |
+| Type-check | `npm run typecheck` |
+| Unit tests | `npm run test:unit` |
+| E2E tests | `npm run test:e2e` |
+
+This table is the authoritative list of the project's commands, for human
+contributors and agents alike. Run format and lint after every change, and the
+suites relevant to the changed surface before opening a pull request; the
+`software-development` skill owns why, and [`AGENTS.md`](./AGENTS.md) requires
+reading this file before running any of them.
+
+If a required command cannot be run, say so — naming the command, the reason,
+and the residual risk — rather than presenting the change as fully verified.

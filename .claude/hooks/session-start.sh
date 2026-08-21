@@ -56,7 +56,7 @@ fi
 
 # install dependencies (a plain install, not a clean/frozen install, so a cached
 # container layer can be reused across sessions).
-{{INSTALL_CMD}}
+npm install
 
 # surface the project's working agreement in every cloud session's context.
 # deliberately a pointer, not a copy: the flow's shape lives in AGENTS.md and

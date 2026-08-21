@@ -1,0 +1,138 @@
+/*
+ * The project's design tokens, in the `variables` layer.
+ *
+ * Colour is mapped from Radix Colors scales onto semantic roles; every other
+ * stylesheet consumes the semantic names below and never a raw `--gray-*` /
+ * `--blue-*` / `--red-*` step, so a palette swap only touches this file.
+ *
+ * The light imports set `--gray-*` / `--blue-*` / `--red-*` on `:root`
+ * themselves (Radix ships that selector in the light files), so the light block
+ * can reference them with `var()`. Radix's dark files scope their custom
+ * properties to a `.dark` / `.dark-theme` class instead, which this project
+ * does not apply — so the dark blocks re-declare the semantic names directly
+ * from the dark scale's published hex values (see `gray-dark.css`,
+ * `blue-dark.css`, `red-dark.css` in `@radix-ui/colors`).
+ *
+ * The non-colour families below do not vary by scheme, so they are declared
+ * once. The colour roles are declared three times — the light default, the
+ * system-dark case, and the explicit dark choice — with structurally identical
+ * names in each, so no surface can reference a token that exists in only one.
+ */
+@import "@radix-ui/colors/gray.css" layer(variables);
+@import "@radix-ui/colors/blue.css" layer(variables);
+@import "@radix-ui/colors/red.css" layer(variables);
+
+@layer variables {
+	:root {
+		/* Colour scheme — read by the `html` rule in global.css, never per surface. */
+		--color-scheme: light dark;
+
+		/* Colour */
+		--color-background: var(--gray-1);
+		--color-surface: var(--gray-2);
+		--color-border: var(--gray-6);
+		--color-border-strong: var(--gray-8);
+		--color-foreground: var(--gray-12);
+		--color-foreground-muted: var(--gray-11);
+
+		--color-accent: var(--blue-9);
+		--color-accent-hover: var(--blue-10);
+		/* Radix pairs steps 9-10 (solid backgrounds) with white text. */
+		--color-accent-foreground: white;
+		--color-focus-ring: var(--blue-8);
+
+		--color-danger: var(--red-9);
+		--color-danger-foreground: white;
+
+		/*
+		 * Typography — composite roles. Family, size, line height, and weight
+		 * travel together so a caller cannot pair a title family with a caption
+		 * size by accident. Apply a role whole; never pick values out of one.
+		 */
+		--font-family-system:
+			system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+			sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+
+		--text-title-family: var(--font-family-system);
+		--text-title-size: 1.5rem;
+		--text-title-line-height: 1.25;
+		--text-title-weight: 600;
+
+		--text-body-family: var(--font-family-system);
+		--text-body-size: 1rem;
+		--text-body-line-height: 1.5;
+		--text-body-weight: 400;
+
+		--text-caption-family: var(--font-family-system);
+		--text-caption-size: 0.875rem;
+		--text-caption-line-height: 1.4;
+		--text-caption-weight: 400;
+
+		--text-label-family: var(--font-family-system);
+		--text-label-size: 0.75rem;
+		--text-label-line-height: 1.4;
+		--text-label-weight: 600;
+		--text-label-tracking: 0.05em;
+
+		/* Spacing — numeric steps keyed to the pixel value they resolve to. */
+		--space-4: 0.25rem;
+		--space-8: 0.5rem;
+		--space-12: 0.75rem;
+		--space-16: 1rem;
+		--space-24: 1.5rem;
+		--space-32: 2rem;
+
+		/* Radius — named tiers, because the steps differ in kind, not amount. */
+		--radius-sm: 0.375rem;
+		--radius-md: 0.5rem;
+		--radius-lg: 0.75rem;
+		--radius-full: 9999px;
+
+		/* Border width — a named tier scale including a hairline step. */
+		--border-width-hairline: 1px;
+		--border-width-base: 2px;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--color-background: #111111;
+			--color-surface: #191919;
+			--color-border: #3a3a3a;
+			--color-border-strong: #606060;
+			--color-foreground: #eeeeee;
+			--color-foreground-muted: #b4b4b4;
+
+			--color-accent: #0090ff;
+			--color-accent-hover: #3b9eff;
+			--color-accent-foreground: white;
+			--color-focus-ring: #2870bd;
+
+			--color-danger: #e5484d;
+			--color-danger-foreground: white;
+		}
+	}
+
+	/*
+	 * The explicit choice, set by the theme preference control as `data-theme`
+	 * on the document. It repeats the dark values above because CSS cannot share
+	 * one declaration block between a media query and a selector — the
+	 * alternative, scoping the palette to a class, would make the default depend
+	 * on JavaScript having run.
+	 */
+	:root[data-theme="dark"] {
+		--color-background: #111111;
+		--color-surface: #191919;
+		--color-border: #3a3a3a;
+		--color-border-strong: #606060;
+		--color-foreground: #eeeeee;
+		--color-foreground-muted: #b4b4b4;
+
+		--color-accent: #0090ff;
+		--color-accent-hover: #3b9eff;
+		--color-accent-foreground: white;
+		--color-focus-ring: #2870bd;
+
+		--color-danger: #e5484d;
+		--color-danger-foreground: white;
+	}
+}
