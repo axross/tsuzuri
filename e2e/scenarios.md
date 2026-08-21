@@ -10,4 +10,4 @@ their journeys land.
 
 | Id                  | Title                                                          | Area | Priority |
 | ------------------- | --------------------------------------------------------------- | ---- | -------- |
-| home.toolchain-proof | Visitor loads the placeholder route and sees the wired-up stack | home | must     |
+| home.toolchain-proof | Visitor loads the placeholder route, sees the wired-up stack, and cycles the persisted theme preference | home | must     |

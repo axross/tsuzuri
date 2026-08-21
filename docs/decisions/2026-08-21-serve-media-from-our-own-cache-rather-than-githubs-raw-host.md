@@ -27,7 +27,8 @@ risk of the second.
 
 jsDelivr was considered as a middle path — it supports GitHub repositories
 officially and is a real CDN — and rejected because it makes a third party a
-hard dependency of every page load and caps a package at 50 MB.
+hard dependency of every page load. Its own package-size ceiling counted
+against it too, though the decision did not rest on that figure.
 
 The consequences: we operate a cache layer and pay for its egress, and GitHub
 sees a read volume proportional to how often content changes rather than to

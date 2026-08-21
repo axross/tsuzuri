@@ -7,9 +7,8 @@ GitHub surface MUST satisfy the rules below.
 
 These figures were established from GitHub's own documentation on 2026-08-20.
 GitHub changes them without notice, so a change that turns on one of these
-numbers MUST re-check the primary source named in
-[Where these figures came from](#where-these-figures-came-from) rather than
-trusting this document.
+numbers MUST re-check the primary source this document cites for it, listed
+near the end, rather than trusting the number here.
 
 ## Never Read GitHub Per Request
 
@@ -146,8 +145,9 @@ Media MUST be delivered through this application's own cache layer. Because an
 author writing Markdown by hand will paste a raw URL sooner or later, the
 render path MUST rewrite a `raw.githubusercontent.com` URL in post content to
 an equivalent URL on this application's own origin. jsDelivr is not an
-acceptable substitute: it is an external dependency with a 50 MB package
-ceiling.
+acceptable substitute: it makes a third party a hard dependency of every page
+load, and it imposes a package-size ceiling of its own, whose
+figure this document has not verified — see the last section.
 
 ## Stay Inside the Hosting Platform's Body Limit
 
@@ -180,5 +180,9 @@ change depends on them:
 - The practical alias count per GraphQL query. The 50–100 range above is
   judgment, not a published limit.
 - The blob size at which `Blob.isTruncated` becomes true.
+- jsDelivr's package-size ceiling. A figure of 50 MB was carried in from the
+  research memo, but no primary source for it was confirmed. Nothing here
+  depends on the number — jsDelivr is ruled out on the external-dependency
+  argument alone — so it is recorded as unverified rather than cited.
 - The thresholds at which GitHub Support actually contacts a repository owner
   about repository health. Only the recommendations are published.

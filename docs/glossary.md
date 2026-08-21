@@ -65,7 +65,7 @@ under their own GitHub identity, using their own **user access token**.
 
 # Development vocabulary
 
-## Github platform limits
+## GitHub platform limits
 
 **Text write path** — the way this application commits changes carrying no
 binary: one GraphQL `createCommitOnBranch` mutation, atomic across files and

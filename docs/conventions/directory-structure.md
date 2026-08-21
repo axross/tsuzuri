@@ -17,6 +17,7 @@ src/
     styles/     the theme layer
     ui/         cross-feature presentational components
   i18n/         next-intl routing and request configuration
+  proxy.ts      next-intl locale negotiation, in front of every matched request
 messages/       one message catalog per locale
 e2e/            Playwright specs and the journey catalog
 ```
@@ -25,8 +26,9 @@ e2e/            Playwright specs and the journey catalog
 repository has its toolchain and its constraints, and no product behaviour yet.
 The first feature creates the first directory under it.
 
-`src/shared/ui/` does not exist yet either, for the same reason and under the
-promotion rule below.
+`src/shared/ui/` holds only the placeholder route's theme preference control.
+It belongs to no feature — it is app shell — so the promotion rule below does
+not apply to it.
 
 ## The Import Direction Is One Way
 
@@ -67,7 +69,7 @@ is what makes adding a second locale a data change rather than a restructuring.
 
 Files and directories are **kebab-case** — `preferences-store.ts`,
 `github-platform-limits.md` — with two exceptions the framework imposes:
-Next.js's own reserved filenames (`layout.tsx`, `page.tsx`, `middleware.ts`,
+Next.js's own reserved filenames (`layout.tsx`, `page.tsx`, `proxy.ts`,
 `instrumentation.ts`) and its bracketed dynamic segments (`[locale]`).
 
 A unit test sits beside the module it covers as `<module>.test.ts`, never in a
@@ -79,10 +81,15 @@ A CSS Module is named for its component — `page.module.css` beside `page.tsx`.
 ## Configuration Stays at the Root
 
 `biome.json`, `next.config.ts`, `tsconfig.json`, `vitest.config.ts`,
-`playwright.config.ts`, `middleware.ts`, `instrumentation.ts`, and
-`instrumentation-client.ts` sit at the repository root because their tools look
-for them there. Do not relocate one behind a config path option to tidy the
-root; the cost lands on every contributor who then cannot find it.
+`playwright.config.ts`, `instrumentation.ts`, and `instrumentation-client.ts`
+sit at the repository root because their tools look for them there. Do not
+relocate one behind a config path option to tidy the root; the cost lands on
+every contributor who then cannot find it.
+
+`proxy.ts` is the exception, and it MUST stay at `src/proxy.ts`: Next.js looks
+for it beside `app/`, which lives under `src/` here. At the repository root it
+is not an error — the build simply does not list a proxy, and locale
+negotiation stops happening with nothing to point at.
 
 ## What Biome Sees Is an Allowlist
 

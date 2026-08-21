@@ -25,13 +25,13 @@ free quota anyway.
 
 The consequences are real and we accept them.
 
-Files above 100 MB cannot be supported, because that is where GitHub's own
-blob ceiling sits. Video is out of scope as a result.
+Large files cannot be supported at all, because GitHub's blob ceiling is a
+hard limit rather than a recommendation. Video is out of scope as a result.
 
-Uploaded images must be re-encoded server-side before they are committed.
-GitHub recommends objects stay under 1 MB, and a product that routinely
-commits untouched multi-megabyte camera output would be operating a hundred
-times outside that advice. Re-encoding is what makes this decision defensible
+Uploaded images must be re-encoded server-side before they are committed. The
+size GitHub recommends an object stay under is far below what a phone camera
+produces, so a product that committed untouched uploads would be operating
+orders of magnitude outside that advice. Re-encoding is what makes this decision defensible
 rather than merely permitted, so it is a requirement of the storage design and
 not a feature that can be deferred.
 

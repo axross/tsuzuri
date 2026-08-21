@@ -1,6 +1,7 @@
 import { Separator } from "@base-ui-components/react/separator";
 import clsx from "clsx";
 import { getTranslations } from "next-intl/server";
+import { ThemePreferenceControl } from "@/shared/ui/theme-preference-control";
 import styles from "./page.module.css";
 
 export default async function HomePage() {
@@ -33,6 +34,15 @@ export default async function HomePage() {
 						</li>
 					))}
 				</ul>
+
+				<ThemePreferenceControl
+					label={t("themePreference.label")}
+					optionLabels={{
+						system: t("themePreference.system"),
+						light: t("themePreference.light"),
+						dark: t("themePreference.dark"),
+					}}
+				/>
 			</section>
 		</main>
 	);

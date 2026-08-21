@@ -7,6 +7,12 @@
 			"framework": "Next.js App Router",
 			"locale": "next-intl — locale: en",
 			"theme": "Radix Colors via semantic CSS variables"
+		},
+		"themePreference": {
+			"label": "Theme preference (Zustand, persisted)",
+			"system": "System",
+			"light": "Light",
+			"dark": "Dark"
 		}
 	}
 }

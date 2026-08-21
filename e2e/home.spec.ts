@@ -4,7 +4,7 @@ test.beforeEach(async ({ page }) => {
 	await page.goto("/");
 });
 
-test("Visitor loads the placeholder route and sees the wired-up stack", {
+test("Visitor loads the placeholder route, sees the wired-up stack, and cycles the persisted theme preference", {
 	tag: [
 		"@scenario:home.toolchain-proof",
 		"@area:home",
@@ -24,5 +24,17 @@ test("Visitor loads the placeholder route and sees the wired-up stack", {
 
 		await expect(stackList.getByRole("listitem")).toHaveCount(3);
 		await expect(card.getByRole("separator")).toBeVisible();
+	});
+
+	await test.step("Verify the Zustand-backed theme preference cycles and reaches the document", async () => {
+		const preference = page.getByTestId("theme-preference");
+
+		await expect(preference).toHaveText("System");
+		await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+
+		await preference.click();
+
+		await expect(preference).toHaveText("Light");
+		await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 	});
 });

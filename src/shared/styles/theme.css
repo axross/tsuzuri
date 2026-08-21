@@ -36,7 +36,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-	:root {
+	:root:not([data-theme="light"]) {
 		--color-background: #111111;
 		--color-surface: #191919;
 		--color-border: #3a3a3a;
@@ -52,4 +52,28 @@
 		--color-danger: #e5484d;
 		--color-danger-foreground: white;
 	}
+}
+
+/*
+ * The explicit choice, set by the theme preference control as `data-theme` on
+ * the document. It repeats the dark values above because CSS cannot share one
+ * declaration block between a media query and a selector — the alternative,
+ * scoping the palette to a class, would make the default depend on JavaScript
+ * having run.
+ */
+:root[data-theme="dark"] {
+	--color-background: #111111;
+	--color-surface: #191919;
+	--color-border: #3a3a3a;
+	--color-border-strong: #606060;
+	--color-foreground: #eeeeee;
+	--color-foreground-muted: #b4b4b4;
+
+	--color-accent: #0090ff;
+	--color-accent-hover: #3b9eff;
+	--color-accent-foreground: white;
+	--color-focus-ring: #2870bd;
+
+	--color-danger: #e5484d;
+	--color-danger-foreground: white;
 }
