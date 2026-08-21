@@ -13,6 +13,16 @@ import * as Sentry from "@sentry/nextjs";
  * warning, no network attempt.
  */
 Sentry.init({
-	dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+	// `|| undefined` for the same reason `src/shared/lib/env.ts` normalizes an
+	// empty string: copying `.env.example` to `.env.local` sets this to `""`,
+	// not to nothing.
+	dsn: process.env.NEXT_PUBLIC_SENTRY_DSN || undefined,
 	tracesSampleRate: 0,
 });
+
+/**
+ * The framework's router transition hook. It fires as a client navigation
+ * begins, which is what scopes errors and spans to the route being entered
+ * rather than to wherever the visitor happened to start.
+ */
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

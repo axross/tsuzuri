@@ -17,11 +17,29 @@ import { z } from "zod";
  * Sentry DSN keeps error tracking inert rather than failing the build or the
  * server.
  */
+
+/**
+ * Treats an empty string as absent, then applies the field's own schema.
+ *
+ * This is not a nicety. `.env.example` documents each variable as a bare
+ * `NAME=`, and the documented setup copies that file to `.env.local`, so a
+ * contributor who follows the README hands the process an empty string for
+ * every variable rather than no value at all. Zod's `.optional()` does not
+ * treat `""` as absent, so without this the server refuses to boot for anyone
+ * who did exactly what the README told them to.
+ */
+function optional<Schema extends z.ZodTypeAny>(schema: Schema) {
+	return z.preprocess(
+		(value) => (value === "" ? undefined : value),
+		schema.optional(),
+	);
+}
+
 const envSchema = z.object({
 	/** Server- and edge-side Sentry DSN. Unset keeps Sentry inert. */
-	SENTRY_DSN: z.string().url().optional(),
+	SENTRY_DSN: optional(z.string().url()),
 	/** Pino root logger level. Defaults to "info" when unset. */
-	LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
+	LOG_LEVEL: optional(z.enum(["debug", "info", "warn", "error"])),
 });
 
 export type Env = z.infer<typeof envSchema>;

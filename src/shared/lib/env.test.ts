@@ -14,6 +14,17 @@ describe("parseEnv", () => {
 		expect(result.SENTRY_DSN).toBe("https://key@o0.ingest.sentry.io/1");
 	});
 
+	it("treats an empty string as an absent value for every field", () => {
+		// `.env.example` documents each variable as a bare `NAME=`, and the
+		// documented setup copies that file to `.env.local` — so this is the
+		// shape the process actually sees when a contributor follows the README,
+		// not a hypothetical.
+		expect(parseEnv({ SENTRY_DSN: "", LOG_LEVEL: "" })).toEqual({
+			SENTRY_DSN: undefined,
+			LOG_LEVEL: undefined,
+		});
+	});
+
 	describe("when SENTRY_DSN is invalid", () => {
 		it("rejects a value that is not a URL", () => {
 			expect(() => parseEnv({ SENTRY_DSN: "not-a-url" })).toThrow();
