@@ -1,0 +1,124 @@
+name: Preview Deployment
+
+# Per-pull-request preview environments, deployed through Vercel. The procedure,
+# the one-time operator setup, and how to read a preview that looks stale are in
+# docs/operations/preview-deployment.md.
+#
+# This workflow is PREFLIGHT-GATED on purpose: with any of the three Vercel
+# secrets missing it deploys nothing, comments nothing, and concludes green. It
+# has to be able to merge before the Vercel project it deploys to exists, and a
+# preflight that failed instead would make every pull request red for a reason
+# no author could fix. A pull request from a fork gets no secrets either, and
+# lands in the same green no-op rather than an error.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# One deploy at a time per pull request, and let a newer push supersede an
+# in-flight one — a superseded deploy would only race to re-point the alias.
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  preview:
+    name: Deploy Preview
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Preflight
+        id: preflight
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::Vercel is not configured for this repository — skipping the preview deploy. See docs/operations/preview-deployment.md."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Deploy
+        id: deploy
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+          url="$(npx --yes vercel@latest deploy --prebuilt --token="$VERCEL_TOKEN")"
+          # A deterministic alias, so a link shared early keeps working across
+          # pushes. The short SHA in the comment is what says whether the
+          # deployment behind it is current.
+          alias="tsuzuri-pr-${{ github.event.pull_request.number }}.vercel.app"
+          npx --yes vercel@latest alias set "$url" "$alias" --token="$VERCEL_TOKEN"
+          echo "alias=https://$alias" >> "$GITHUB_OUTPUT"
+
+      # A fresh comment per deploy rather than an edit, so the thread reads as a
+      # history of what was deployed when.
+      - name: Comment the preview URL
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.pull_request.head.sha.slice(0, 7)
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: [
+                `**Preview deployed** — ${{ steps.deploy.outputs.alias }}`,
+                ``,
+                `Built from \`${sha}\`. If that is not the branch head, this deploy is not current:`,
+                `the alias keeps serving the last deploy that built successfully.`,
+              ].join("\n"),
+            })
+
+  teardown:
+    name: Tear Down Preview
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preflight
+        id: preflight
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::Vercel is not configured for this repository — nothing to tear down."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Remove the alias
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          alias="tsuzuri-pr-${{ github.event.pull_request.number }}.vercel.app"
+          npx --yes vercel@latest alias rm "$alias" --yes --token="$VERCEL_TOKEN"
