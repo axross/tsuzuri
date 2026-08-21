@@ -26,6 +26,16 @@ test("Visitor loads the placeholder route, sees the wired-up stack, and cycles t
 		await expect(card.getByRole("separator")).toBeVisible();
 	});
 
+	await test.step("Verify the scoped component styles actually apply", async () => {
+		// `@scope` has no fallback: a browser that does not understand it drops
+		// the whole block, and every rule inside goes with it. Asserting text
+		// alone would still pass against a completely unstyled page, so this
+		// checks a computed value that can only come from the token layer
+		// reaching through the cascade-layer skeleton.
+		await expect(page.getByTestId("page")).toHaveCSS("padding", "32px");
+		await expect(page.getByTestId("card")).toHaveCSS("border-radius", "12px");
+	});
+
 	await test.step("Verify the Zustand-backed theme preference cycles and reaches the document", async () => {
 		const preference = page.getByTestId("theme-preference");
 

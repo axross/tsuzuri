@@ -29,6 +29,9 @@ describes.
   a test belongs in, where it lives, and what the scenario catalog counts.
 - [conventions/security.md](./conventions/security.md) — who may hold which
   token, who owns the session, and why this project sets no lockout threshold.
+- [conventions/styling.md](./conventions/styling.md) — the cascade layer order,
+  how a component's styles are scoped, where values come from, and the browser
+  floor the scoping skeleton sets.
 - [conventions/documentation.md](./conventions/documentation.md) — how this
   project's own documentation is kept true: correcting what a change
   invalidated, making a new document reachable, and the checks a documentation

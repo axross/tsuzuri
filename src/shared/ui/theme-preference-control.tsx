@@ -5,7 +5,7 @@ import {
 	type ThemePreference,
 	usePreferencesStore,
 } from "@/shared/state/preferences-store";
-import styles from "./theme-preference-control.module.css";
+import css from "./theme-preference-control.module.css";
 
 const ORDER: readonly ThemePreference[] = ["system", "light", "dark"];
 
@@ -41,10 +41,10 @@ export function ThemePreferenceControl({
 	}, [theme]);
 
 	return (
-		<div className={styles.control}>
-			<span className={styles.label}>{label}</span>
+		<div className={css.control}>
+			<span className={css.label}>{label}</span>
 			<button
-				className={styles.button}
+				className={css.button}
 				data-testid="theme-preference"
 				onClick={() =>
 					setTheme(ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length])

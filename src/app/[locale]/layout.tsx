@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import { routing } from "@/i18n/routing";
+import "@/shared/styles/layers.css";
 import "@/shared/styles/theme.css";
 import "@/shared/styles/global.css";
 

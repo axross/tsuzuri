@@ -53,6 +53,7 @@ distinguishes, so a session does not have to open the index for one of these.
 | Anything that reads from or writes to the GitHub API | [docs/conventions/github-platform-limits.md](./docs/conventions/github-platform-limits.md) |
 | Adding or changing a test, in either suite | [docs/conventions/testing.md](./docs/conventions/testing.md) |
 | Token custody, sessions, or anything touching a credential | [docs/conventions/security.md](./docs/conventions/security.md) |
+| Any stylesheet, design token, or CSS Module | [docs/conventions/styling.md](./docs/conventions/styling.md) |
 | The per-pull-request preview environment | [docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md) |
 
 ## Response Approach
