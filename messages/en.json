@@ -1,0 +1,12 @@
+{
+	"HomePage": {
+		"title": "tsuzuri",
+		"description": "A web application that treats a linked GitHub repository as the blog's backend.",
+		"stackHeading": "Wired up",
+		"stack": {
+			"framework": "Next.js App Router",
+			"locale": "next-intl — locale: en",
+			"theme": "Radix Colors via semantic CSS variables"
+		}
+	}
+}
