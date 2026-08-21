@@ -135,11 +135,6 @@ An entry records a decision the human accepted, with its reason. A hypothetical
 or anticipated collision MUST NOT be entered: a deviation is recorded when it is
 accepted, not when it is expected.
 
-<!-- INIT: the one entry below is real, not an example — keep it while the
-project has authentication and the gap is still open upstream. Do not seed the
-section with anything else; an otherwise-empty register is the correct state
-for a project that has not departed from an installed rule. -->
-
 ### Gap — `application-security` is silent on authentication lockout and session-cookie ownership
 
 `application-security` presents itself as an OWASP Top 10 lens, and OWASP's
@@ -161,11 +156,18 @@ a login needs have no home in the installed set:
   it changes them.
 
 Neither is framework-specific. `next-app-development` covers adjacent ground
-for one framework, but this project does not necessarily install it, and the
-rules apply to any project with a login.
+for one framework, and this project does install it, but the rules apply to any
+project with a login and that skill states them for none of them.
 
 **Until the gap closes:** a project with authentication states these thresholds
-in its own `docs/conventions/security.md` and reviews against them there. The
+in its own `docs/conventions/security.md` and reviews against them there. This
+project's answer is in
+[conventions/security.md](../conventions/security.md), and only half the gap
+binds it: it issues its own session cookie, so the ownership rule applies, but
+it verifies no credential of its own, so there is no lockout threshold for it
+to set. That document says so explicitly rather than leaving the absence to be
+read as an oversight — and a change that introduces a credential this
+application verifies itself brings the other half into scope. The
 gap is worth filing upstream on
 [`axross/skills`](https://github.com/axross/skills) because it generalizes well
 beyond this project — but filing is a public write on a repository this project

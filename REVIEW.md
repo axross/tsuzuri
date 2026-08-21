@@ -1,8 +1,5 @@
 # Review Instructions
 
-<!-- INIT:OPTIONAL key=INDEPENDENT_REVIEW — Fixed: INIT KEEPS this file (the independent-review channel is fixed infrastructure, see INIT.md Step 4). Just delete this marker and the italic note below, then configure it — enumerate the do-not-report list from the checks CI actually enforces. A project that wants no automated review loop disables the workflow triggers rather than deleting this file. -->
-*Configure this policy during INIT: enumerate the do-not-report list from the project's CI-enforced checks.*
-
 Review **policy** for this repository — the highest-priority, review-only
 instructions. Every reviewer entry point reads this file: a managed review
 product (e.g. Claude Code's managed Code Review) natively, and the CI
@@ -133,11 +130,22 @@ it excludes — the mechanical check and the finding are the same thing. A check
 that is only a narrow proxy for a broader prose rule does **not** silence the
 reviewer on that rule.
 
-<!-- INIT: replace the bullets below with one entry per check this project's CI actually enforces (the jobs in .github/workflows/merge-checks.yaml). Name the check, not the category — and add an entry only when the check and the finding it would silence are the same thing. -->
-
-- The lint check run by the project's merge-checks workflow.
-- The unit-test run by the project's merge-checks workflow — a test that fails
-  there, not a test that is missing.
+- The **Lint** job in `merge-checks.yaml` — a Biome formatting or lint-rule
+  violation in a file `biome.json` includes. A style point Biome does not have a
+  rule for is not covered by this entry.
+- The **Type Check** job in `merge-checks.yaml` — a `tsc --noEmit` error. A type
+  that compiles but models the domain wrongly is still worth reporting.
+- The **Unit Tests** job in `merge-checks.yaml` — a test that *fails* there.
+  A test that is missing, or one that asserts nothing, is not covered.
+- The **Relative Link Check** job in `merge-checks.yaml` — a relative link that
+  does not resolve. Whether a link *should* have been written, or points at the
+  wrong document, is not covered.
+- The **Docs Check** job in `merge-checks.yaml` — only the five things its
+  validators actually decide: a document missing from `docs/index.md`, a
+  malformed decision-record filename, a broken supersede chain or a citation of
+  replaced rationale, a glossary heading with no matching spec, and an
+  unresolvable reference. Whether a document says the right thing is not
+  covered, and neither is a decision that should have been recorded and was not.
 - Lockfiles and generated files, including any installed skill directory under
   `.claude/skills/`, which is generated from `skills-lock.json`.
 

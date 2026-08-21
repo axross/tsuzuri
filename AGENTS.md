@@ -1,19 +1,20 @@
 # AGENTS.md
 
-> **Template note.** This file is a reusable, framework-agnostic starting
-> point — the working agreement a Claude Code project loads through
-> `CLAUDE.md`. Before using it in a real project, run the adaptation pass
-> described in [INIT.md](./INIT.md): fill in the `{{...}}` tokens, complete the
-> Project Overview, install the stack-specific skills the project needs, and
-> grow `docs/` with the routing rows that point at it. Delete this note when
-> the template has been adapted.
-
 ## Project Overview
 
-- **tsuzuri** is a web app. A web application that treats a GitHub repository a user has linked to it as the blog's backend, formatting and serving the posts, media, and metadata it holds.
-- Primary language: TypeScript. App framework: Next.js.
-- Tooling: npm for packages, Biome for linting,
-  Biome for formatting.
+- **tsuzuri** is a web app that treats a GitHub repository a user has linked to
+  it as the blog's backend. Posts, embedded media, and metadata live in that
+  repository; this application formats and serves them, writes authored changes
+  back as commits through a companion GitHub App, and carries reader comments on
+  GitHub Discussions.
+- It adds no persistence layer of its own. The linked repository is the only
+  source of truth, and everything else is a cache that can be rebuilt from it.
+  What that costs, and the GitHub limits it runs into, is
+  [docs/conventions/github-platform-limits.md](./docs/conventions/github-platform-limits.md).
+- Primary language: TypeScript. App framework: Next.js (App Router), hosted on
+  Vercel.
+- Tooling: npm for packages, Biome for both linting and formatting, Vitest for
+  unit tests, Playwright for end-to-end tests.
 - [README.md](./README.md) is the authoritative record of this project's
   run-script commands. It is not a skill, so skill discovery never surfaces it
   on its own.
@@ -29,28 +30,16 @@
   [docs/operations/agent-skills.md](./docs/operations/agent-skills.md) for how
   they are refreshed and how a wrong or missing rule is routed.
 - This project's fixed agent-comment marker is `<!-- agent -->`.
-  <!-- INIT: replace with the project's own marker if it uses a different one, and record any retired predecessor here. -->
   Begin every agent-authored GitHub comment with it, identically across every
   run, so a later run can tell its own output from human input.
 - Never push to the default branch. Work on a `claude/`-prefixed branch and
-  leave merging to the maintainer, `@<maintainer>`.
-  <!-- INIT: replace `@<maintainer>` with the connected operator's real handle. -->
+  leave merging to the maintainer, `@axross`.
 
 ## Routing a Change
 
 [docs/index.md](./docs/index.md) says which document holds what; this table
 names the specific document for a kind of change this project already
 distinguishes, so a session does not have to open the index for one of these.
-
-<!-- INIT: the six rows below ship with the template and stay true after
-adaptation. Add a row per surface the project distinguishes, as `docs/` grows — at
-minimum `docs/conventions/directory-structure.md` for where a file goes, and a
-`docs/specs/` row per product domain. The template ships neither, because it has
-no source tree and no product to describe, and an empty document would make this
-table claim coverage `docs/` does not have. A kind of change this table does not
-name has no document pointing a session at it: that is the known cost of keeping
-conventions in documents rather than in skills, and adding the row is how it is
-paid. Link only — never copy a document's content into this file. -->
 
 | Kind of change | Document |
 | -------------- | -------- |
@@ -60,6 +49,11 @@ paid. Link only — never copy a document's content into this file. -->
 | How an agent session starts, its hooks, its subagents, or its telemetry | [docs/operations/agent-sessions.md](./docs/operations/agent-sessions.md) |
 | Why a past decision still constrains current work | [docs/decisions/](./docs/decisions) |
 | Adding, renaming, or correcting a document under `docs/` | [docs/conventions/documentation.md](./docs/conventions/documentation.md) |
+| Where a file goes, what it is named, or which module may import which | [docs/conventions/directory-structure.md](./docs/conventions/directory-structure.md) |
+| Anything that reads from or writes to the GitHub API | [docs/conventions/github-platform-limits.md](./docs/conventions/github-platform-limits.md) |
+| Adding or changing a test, in either suite | [docs/conventions/testing.md](./docs/conventions/testing.md) |
+| Token custody, sessions, or anything touching a credential | [docs/conventions/security.md](./docs/conventions/security.md) |
+| The per-pull-request preview environment | [docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md) |
 
 ## Response Approach
 
