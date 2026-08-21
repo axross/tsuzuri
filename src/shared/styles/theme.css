@@ -1,0 +1,55 @@
+/*
+ * Maps Radix Colors scales onto this project's semantic CSS variables.
+ * Every other stylesheet consumes the semantic names below — never a raw
+ * `--gray-*` / `--blue-*` / `--red-*` step directly — so a future palette
+ * swap only touches this file.
+ *
+ * The light imports set `--gray-*` / `--blue-*` / `--red-*` on `:root`
+ * themselves (Radix ships that selector in the light files), so the light
+ * block below can reference them with `var()`. Radix's dark files scope
+ * their custom properties to a `.dark` / `.dark-theme` class instead of
+ * `:root`, which this project has no JS theme toggle to apply — so the dark
+ * block re-declares the semantic variables directly from the dark scale's
+ * published hex values (see `gray-dark.css` / `blue-dark.css` / `red-dark.css`
+ * in `@radix-ui/colors`) rather than through `var()`.
+ */
+@import "@radix-ui/colors/gray.css";
+@import "@radix-ui/colors/blue.css";
+@import "@radix-ui/colors/red.css";
+
+:root {
+	--color-background: var(--gray-1);
+	--color-surface: var(--gray-2);
+	--color-border: var(--gray-6);
+	--color-border-strong: var(--gray-8);
+	--color-foreground: var(--gray-12);
+	--color-foreground-muted: var(--gray-11);
+
+	--color-accent: var(--blue-9);
+	--color-accent-hover: var(--blue-10);
+	/* Radix pairs steps 9-10 (solid backgrounds) with white text. */
+	--color-accent-foreground: white;
+	--color-focus-ring: var(--blue-8);
+
+	--color-danger: var(--red-9);
+	--color-danger-foreground: white;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-background: #111111;
+		--color-surface: #191919;
+		--color-border: #3a3a3a;
+		--color-border-strong: #606060;
+		--color-foreground: #eeeeee;
+		--color-foreground-muted: #b4b4b4;
+
+		--color-accent: #0090ff;
+		--color-accent-hover: #3b9eff;
+		--color-accent-foreground: white;
+		--color-focus-ring: #2870bd;
+
+		--color-danger: #e5484d;
+		--color-danger-foreground: white;
+	}
+}
