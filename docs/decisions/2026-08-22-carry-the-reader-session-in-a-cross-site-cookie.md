@@ -75,13 +75,18 @@ token rather than either alone. The security conventions state the mechanism and
 why the allowlist cannot carry the load by itself; what belongs here is why we
 did not stop at one.
 
-An allowlist alone was rejected because it fails open in the case that matters:
-the request the attacker wants is the one that reaches the server, and no
-response-side check undoes a write already performed. A token alone was rejected
-for the opposite reason — it would hold, but it discards a cheap check that
-rejects most hostile traffic before any handler runs, and leaves a single
-implementation mistake as the only thing between a reader's session and a
-stranger. Neither saving was worth the narrowing.
+An allowlist alone was rejected. The security conventions set out why it does
+not hold on its own; the decision was to treat that gap as disqualifying rather
+than as a residual risk worth carrying, since the case it fails in is the one an
+attacker would pick.
+
+A token alone was rejected for a different reason, and this is the one no
+convention implies. The token holds — nothing forced a second mechanism — but
+keeping the allowlist buys two things a token cannot. It rejects most hostile
+traffic before any handler runs, which is cheap, and it means a single mistake
+in one mechanism's implementation is not the only thing standing between a
+reader's session and a stranger. We were not willing to make correctness in one
+place load-bearing for the whole surface.
 
 ## What the session's lifetime is
 
