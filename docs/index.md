@@ -48,6 +48,9 @@ describes.
 - [operations/preview-deployment.md](./operations/preview-deployment.md) — the
   per-pull-request preview environment: what a run does, and the one-time setup
   that arms it.
+- [operations/production-deployment.md](./operations/production-deployment.md)
+  — the manually dispatched production deployment and the release it cuts:
+  what a run does, and the one-time operator setup it depends on.
 - [operations/agent-skills.md](./operations/agent-skills.md) — installing and
   refreshing the agent skills, and the register of deviations and gaps.
 - [operations/agent-sessions.md](./operations/agent-sessions.md) — how a
