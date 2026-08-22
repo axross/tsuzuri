@@ -55,10 +55,14 @@ unsupported** and a change MUST NOT introduce a path that assumes otherwise.
 
 GitHub's *recommended* single-object size is **1 MB** — the 100 MB figure is
 the hard limit, not the advice. Uploaded images MUST therefore be re-encoded
-server-side before they are committed, targeting under 1 MB (roughly a
-2000px long edge in WebP or AVIF lands at 200–500 KB). This is a condition of
-the project's own justification for storing media in the repository at all,
-not a nice-to-have: see
+server-side before they are committed, targeting under 1 MB. A 2000px long
+edge in WebP at quality 80 was measured on 2026-08-22 to land between **77 KB
+and 684 KB** across a 54 MB photograph, a 12-megapixel phone photograph, a
+screenshot, and a logo with transparency — one pass, no fallback needed. Do
+**not** read AVIF as interchangeable with WebP here: at the same nominal
+quality it was 7–33× slower and larger on both photographs. This is a
+condition of the project's own justification for storing media in the
+repository at all, not a nice-to-have: see
 [the decision to store media in the linked repository](../decisions/2026-08-21-store-media-in-the-linked-repository-rather-than-in-object-storage.md).
 
 ## Always Check `truncated`
