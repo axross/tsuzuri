@@ -9,9 +9,9 @@ premise `AGENTS.md` states in its Project Overview section and `README.md`
 states in its second paragraph: the session record behind a login or a
 reader comment, the per-blog API keys issue #32 needs to be revocable, and
 the re-encoded media cache that stands between readers and GitHub's raw
-host. None of the three had a home. We picked one for each from Vercel's and Next.js's own current
-documentation, read on 2026-08-22, rather than from memory or from the
-research memo the project started from.
+host. None of the three had a home. We picked one for each from Vercel's and
+Next.js's own current documentation, read on 2026-08-22, rather than from
+memory or from the research memo the project started from.
 
 Two constraints, settled with the maintainer on 2026-08-22, drove the choice:
 per-key API-key revocation is a requirement — one leaked key must be stoppable
@@ -401,6 +401,13 @@ The following figures were not stated in the vendor documentation read on
 - Vercel Blob's exact operation and data-transfer prices outside the `iad1`
   region used in the pricing page's worked example; the page states pricing
   is regional but does not tabulate every region.
+- Which plan the Blob included allowances quoted above belong to. The 5 GB,
+  100K, 10K, and 100 GB figures come from that same worked example, which
+  does not name a plan, and the page renders its per-plan "included" column
+  client-side against the viewer's own team rather than in the served HTML.
+  The example computes a dollar total, so it is a paid-tier scenario rather
+  than the Hobby one, but that is inference — it is not confirmation that
+  these are the Pro allowances this record otherwise prices against.
 
 ## What this invalidates
 
@@ -420,3 +427,19 @@ implements this decision.
 `docs/conventions/security.md` § "Session Cookies Are This Application's, Not
 GitHub's" is not invalidated — see Session state above — so no rewrite is
 named for it.
+
+`docs/conventions/security.md` § "There Is No Lockout Threshold Here,
+Deliberately" **is** invalidated, and it says so itself: it closes by stating
+that a change introducing any credential this application verifies for itself
+invalidates the section and must replace it. The API-key verifier decided
+above is exactly that credential. Until now every identity decision was
+GitHub's, which is what let that section rule out a failed-attempt threshold,
+a lockout window, and an account-recovery flow as things this project has no
+surface for. An API key this application checks against its own stored
+verifier gives it one: a caller can now guess, and nothing in the design so
+far says what happens when a caller guesses repeatedly. The replacement has
+to decide that — at minimum whether key verification is rate-limited, and per
+what, given that the keyless public surface issue #37 covers is rate-limited
+on its own terms. Writing it is out of scope here for the same reason the
+`README.md` and `AGENTS.md` carve-out is: this record decides where the state
+lives, and the plan's non-goals exclude editing the documents it invalidates.
