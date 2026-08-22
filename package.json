@@ -15,6 +15,12 @@
 	},
 	"dependencies": {
 		"@base-ui-components/react": "1.0.0-rc.0",
+		"@cf-wasm/photon": "0.4.0",
+		"@jsquash/avif": "2.1.1",
+		"@jsquash/jpeg": "1.6.0",
+		"@jsquash/png": "3.1.1",
+		"@jsquash/resize": "2.1.1",
+		"@jsquash/webp": "1.5.0",
 		"@radix-ui/colors": "3.0.0",
 		"@sentry/nextjs": "10.70.0",
 		"clsx": "2.1.1",
@@ -23,6 +29,8 @@
 		"pino": "10.3.1",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
+		"sharp": "0.35.3",
+		"wasm-vips": "0.0.18",
 		"zod": "4.4.3",
 		"zustand": "5.0.15"
 	},
