@@ -58,8 +58,7 @@ representation of a repository we do not control.
 | Posting a top-level **reader comment** | that reader's **user access token** |
 | Posting a reply | that reader's **user access token** |
 
-The first row is the one write
-[the security conventions](../conventions/security.md) allow on the
+The first row is the one write the security conventions allow on the
 application's own identity, so that the first reader to comment does not become
 the person who opened the discussion. The other two carry the reader's own name
 and count against the reader's own quota.
@@ -110,6 +109,19 @@ wholesale. `<b>` and `<details>` survive as markup. `<script>`, `<iframe>`, and
 attribute, and is reissued through GitHub's image proxy. An anchor whose href is
 `javascript:`, `data:`, or `vbscript:` loses the anchor entirely, leaving only
 its text.
+
+The subset this product intends to expose — bold, italics, and links — is not
+exempt from either half of that. All three store verbatim; `**bold**` renders as
+`<strong>` and `*italic*` as `<em>` untouched; and a link comes back as
+`<a href="…" rel="nofollow">`, with the `rel` **added** by GitHub. Nothing in
+the subset is rejected, but the link is rewritten, and rewritten only on
+GitHub's side: a consumer reading the stored Markdown sees no `rel` at all and
+must add it itself.
+
+A bare URL is the same asymmetry in the other direction. It stays bare text in
+storage and renders as a link anyway, so validation written against link
+*syntax* does not limit links — a rule about links has to act on what a renderer
+will produce rather than on what the reader typed.
 
 This product serves Markdown rather than GitHub's HTML, so what a consumer
 receives is `body` — the unsanitized one. The read-path neutralization the

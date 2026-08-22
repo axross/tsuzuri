@@ -187,6 +187,30 @@ Any path that returns a comment to a consumer MUST therefore sanitize it here.
 There is no upstream sanitization to fall back on, and a change that assumes
 GitHub already cleaned the text is wrong.
 
+The restricted subset this product intends to expose to readers — bold,
+italics, and links, and nothing else — behaves like this. All three are stored
+byte-for-byte, because the whole body is:
+
+| Construct | Stored | Rendered by GitHub |
+| --------- | ------ | ------------------ |
+| `**bold**` | verbatim | `<strong>` |
+| `*italic*` | verbatim | `<em>` |
+| `[text](https://…)` | verbatim | `<a href="…" rel="nofollow">` — the `rel` is **added** |
+
+GitHub rejects none of the three. The link row is the one rewrite inside the
+subset, and it happens only on GitHub's side: a consumer reading `body` gets no
+`rel` attribute, because that attribute exists nowhere but in GitHub's own
+render. A consumer that wants `nofollow` on a reader's link MUST add it itself,
+and this project's own contract MUST say so rather than letting a consumer
+assume the platform did it.
+
+One more asymmetry belongs with the subset rather than outside it. **A bare URL
+is a link once rendered**: `https://example.com/…` stays bare text in `body` and
+comes back as an `<a … rel="nofollow">` in `bodyHTML`, with no link syntax
+anywhere in the source. Validation that rejects link *syntax* therefore does not
+stop a reader from posting a link, and a change that limits links MUST act on
+the rendered result rather than on what the reader typed.
+
 ## Never Link `raw.githubusercontent.com`
 
 Storing media in a repository is sanctioned; serving it from GitHub's raw host
@@ -222,10 +246,13 @@ size the chunks against 4.5 MB of *encoded* bytes.
 - [Webhook events and payloads](https://docs.github.com/en/webhooks/webhook-events-and-payloads) — the "Discussions" repository permission a GitHub App needs
 - [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app) — that a user access token reaches only what the user and the app can both reach
 
-The two-level reply ceiling, the `UNPROCESSABLE` message, and the storage and
-rendering behaviour of a comment body have no documented source. They were
-measured against the live GraphQL API on 2026-08-22 and are recorded here
-because nothing published states them.
+The two-level reply ceiling, the `UNPROCESSABLE` message, the storage and
+rendering behaviour of a comment body, and the per-construct subset table have
+no documented source. They were measured against the live GraphQL API on
+2026-08-22 — one comment carrying the intended subset, every construct outside
+it, raw HTML, and dangerous link schemes, posted and then read back through
+`body`, `bodyText`, and `bodyHTML` — and are recorded here because nothing
+published states them.
 
 ## What Is Still Unverified
 
