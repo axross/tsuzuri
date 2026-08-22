@@ -117,8 +117,9 @@ profile?](https://docs.github.com/en/account-and-profile/setting-up-and-managing
 read 2026-08-22, both facts) — but no documentation states which address the
 mutation itself picks, so neither claim can be marked verified from a primary
 source. Settling either needs an observed response from a registered app and
-a minted user token, which this investigation did not run; a follow-up issue
-carries the two claims and the steps that would settle them.
+a minted user token, which this investigation did not run;
+[issue #59](https://github.com/axross/tsuzuri/issues/59) carries the two claims
+and the steps that would settle them.
 
 The consequence lands in this same change: the webhook exclusion this project
 relies on identified our own writes by the application's bot identity, and a
