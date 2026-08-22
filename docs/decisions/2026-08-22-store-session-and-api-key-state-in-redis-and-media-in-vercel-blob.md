@@ -408,8 +408,8 @@ The following figures were not stated in the vendor documentation read on
 `README.md`'s opening paragraph, and `AGENTS.md`'s Project Overview section
 that mirrors it, both claim this application keeps no persistence layer of
 its own — that everything outside the linked repository is a derived cache
-rebuildable from it. Both
-claims become false the moment this decision's stores exist. Media is a
+rebuildable from it. Both claims become false the moment this decision's
+stores exist. Media is a
 rebuild, as shown above, so it does not break the claim on its own — but the
 API-key verifier's scopes are genuine data loss if its store is lost, not
 something the linked repository can rebuild, and session state sits outside
