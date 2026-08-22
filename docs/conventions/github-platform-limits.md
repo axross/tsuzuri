@@ -5,10 +5,16 @@ publishes both hard limits that reject a request and soft recommendations that
 degrade a repository's health without ever failing. A change that touches the
 GitHub surface MUST satisfy the rules below.
 
-These figures were established from GitHub's own documentation on 2026-08-20.
-GitHub changes them without notice, so a change that turns on one of these
+Most of these figures were established from GitHub's own documentation on
+2026-08-20. The Discussions section is younger and different in kind: it was
+measured against the live API on 2026-08-22, because GitHub publishes almost
+none of what it states — each section says which of the two it rests on.
+
+GitHub changes any of it without notice, so a change that turns on one of these
 numbers MUST re-check the primary source this document cites for it, listed
-near the end, rather than trusting the number here.
+near the end, rather than trusting the number here. For a figure that was
+measured rather than read, re-checking means measuring again: there is no
+primary source to consult.
 
 ## Never Read GitHub Per Request
 
@@ -154,6 +160,91 @@ project already accepts elsewhere: it is rebuildable, and losing it before a
 webhook arrives costs at most one redundant, idempotent cache refresh rather
 than an infinite loop.
 
+## Treat a Discussion Comment as Two Levels Deep and Unsanitized
+
+Discussions are reachable through GraphQL only; there is no REST equivalent for
+a repository's discussions, so a change that touches them MUST go through the
+GraphQL API.
+
+A discussion holds top-level comments, and each top-level comment holds replies.
+**A reply holds nothing.** Passing `replyToId` a comment that is itself a reply
+fails with type `UNPROCESSABLE` and the message `Parent comment is already in a
+thread, cannot reply to it`. A change MUST NOT design a comment tree deeper than
+those two levels, and MUST NOT assume the ceiling is permanent: GitHub publishes
+no maximum depth, so this figure was measured rather than read, and re-measuring
+is the only way to know it still holds.
+
+Why the product takes that ceiling as its own rather than representing a deeper
+tree on top of it — and what representing one would have cost — is in
+[the decision to cap comments at the shape GitHub Discussions stores](../decisions/2026-08-22-cap-comments-at-the-shape-github-discussions-stores.md).
+The rules in this section hold without it; the record is where the alternative
+that was considered and dropped is kept.
+
+The read shape follows the same two levels. `Discussion.comments` returns **only
+top-level comments** — a reply is absent from it — and each node carries its own
+`replies` connection. Code that counts comments from `comments.totalCount` is
+counting threads, not comments.
+
+Three writes, three tokens:
+
+| Write | Token |
+| ----- | ----- |
+| Creating a comment thread that does not exist yet | the installation access token |
+| Posting a reader's top-level comment | that reader's user access token |
+| Posting a reader's reply | that reader's user access token |
+
+Both token kinds depend on the companion app holding the **Discussions**
+repository permission at write level, which is fixed when the app is registered
+rather than at runtime. A user access token additionally reaches only what the
+reader and the app can *both* reach, so a reader who is not a collaborator can
+never comment on a private repository's discussions, however the flow is
+arranged. The operative condition there is access rather than visibility: a
+token that *does* reach a private repository creates and comments on its
+discussions without difficulty. A surface that meets this case MUST report
+comments as unavailable and name the repository's visibility as the reason —
+never an empty thread, which reads as "nobody has commented", and never an
+authorization error, which reads as a fault.
+
+**GitHub stores a comment body exactly as written.** Reading `body` back returns
+the bytes that were posted, including raw `<script>` tags, `onerror` attributes,
+and `javascript:` link targets. Only `bodyHTML` — GitHub's own rendering — is
+sanitized, and only partly: `<b>` and `<details>` survive as markup, `<script>`,
+`<iframe>` and `<style>` come back escaped, an `<img>` loses its `onerror`, and
+an anchor with a `javascript:`, `data:`, or `vbscript:` target loses the anchor
+and keeps its text.
+
+Since this project serves Markdown rather than GitHub's HTML, it serves `body`.
+Any path that returns a comment to a consumer MUST therefore sanitize it here.
+There is no upstream sanitization to fall back on, and a change that assumes
+GitHub already cleaned the text is wrong. Serving the source rather than
+GitHub's rendering was a choice, and the sanitization burden was its accepted
+price rather than an oversight; what was weighed is in
+[the decision to cap comments at the shape GitHub Discussions stores](../decisions/2026-08-22-cap-comments-at-the-shape-github-discussions-stores.md).
+
+The restricted subset this product intends to expose to readers — bold,
+italics, and links, and nothing else — behaves like this. All three are stored
+byte-for-byte, because the whole body is:
+
+| Construct | Stored | Rendered by GitHub |
+| --------- | ------ | ------------------ |
+| `**bold**` | verbatim | `<strong>` |
+| `*italic*` | verbatim | `<em>` |
+| `[text](https://…)` | verbatim | `<a href="…" rel="nofollow">` — the `rel` is **added** |
+
+GitHub rejects none of the three. The link row is the one rewrite inside the
+subset, and it happens only on GitHub's side: a consumer reading `body` gets no
+`rel` attribute, because that attribute exists nowhere but in GitHub's own
+render. A consumer that wants `nofollow` on a reader's link MUST add it itself,
+and this project's own contract MUST say so rather than letting a consumer
+assume the platform did it.
+
+One more asymmetry belongs with the subset rather than outside it. **A bare URL
+is a link once rendered**: `https://example.com/…` stays bare text in `body` and
+comes back as an `<a … rel="nofollow">` in `bodyHTML`, with no link syntax
+anywhere in the source. Validation that rejects link *syntax* therefore does not
+stop a reader from posting a link, and a change that limits links MUST act on
+the rendered result rather than on what the reader typed.
+
 ## Never Link `raw.githubusercontent.com`
 
 Storing media in a repository is sanctioned; serving it from GitHub's raw host
@@ -185,6 +276,17 @@ size the chunks against 4.5 MB of *encoded* bytes.
 - [GraphQL reference: Commits](https://docs.github.com/en/graphql/reference/commits) — `createCommitOnBranch` and `expectedHeadOid`
 - [Git LFS billing](https://docs.github.com/en/billing/concepts/product-billing/git-lfs) — the quotas that rule LFS out
 - [Vercel Functions limitations](https://vercel.com/docs/functions/limitations) — the 4.5 MB request body cap
+- [Using the GraphQL API for Discussions](https://docs.github.com/en/graphql/guides/using-the-graphql-api-for-discussions) — that discussions are GraphQL-only, and `replyToId`'s meaning
+- [Webhook events and payloads](https://docs.github.com/en/webhooks/webhook-events-and-payloads) — the "Discussions" repository permission a GitHub App needs
+- [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app) — that a user access token reaches only what the user and the app can both reach
+
+The two-level reply ceiling, the `UNPROCESSABLE` message, the storage and
+rendering behaviour of a comment body, and the per-construct subset table have
+no documented source. They were measured against the live GraphQL API on
+2026-08-22 — one comment carrying the intended subset, every construct outside
+it, raw HTML, and dangerous link schemes, posted and then read back through
+`body`, `bodyText`, and `bodyHTML` — and are recorded here because nothing
+published states them.
 
 ## What Is Still Unverified
 
@@ -205,3 +307,12 @@ change depends on them:
   argument alone — so it is recorded as unverified rather than cited.
 - The thresholds at which GitHub Support actually contacts a repository owner
   about repository health. Only the recommendations are published.
+- Whether the discussion writes above behave the same for the identities this
+  project will actually use. Every measurement was taken with a fine-grained
+  personal access token belonging to the repository's own owner; neither an
+  installation access token nor a reader who is not a collaborator was
+  exercised. The token table states what the permission model says, not what
+  was observed, and a change that turns one of those rows on MUST verify it.
+- Whether the two-level reply ceiling is a stable platform property or an
+  implementation detail. It is measured and undocumented, so it may move
+  without notice.
