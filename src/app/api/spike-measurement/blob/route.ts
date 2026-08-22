@@ -2,8 +2,9 @@ import {
 	getScratchRepo,
 	githubRequest,
 	guardSpikeRequest,
-	mintInstallationToken,
-} from "../github-app";
+	mintInstallationTokenOrError,
+	SHA_PATTERN,
+} from "@/shared/lib/spike-github-app";
 
 /**
  * Throwaway measurement scaffolding for issue #6, deleted before the pull
@@ -14,8 +15,6 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const SHA_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 export async function GET(request: Request) {
 	const denied = guardSpikeRequest(request);
@@ -31,21 +30,17 @@ export async function GET(request: Request) {
 		);
 	}
 
-	let token: string;
-	try {
-		({ token } = await mintInstallationToken());
-	} catch {
-		return Response.json(
-			{ error: "Failed to mint installation access token" },
-			{ status: 502 },
-		);
+	const minted = await mintInstallationTokenOrError();
+	if (minted instanceof Response) {
+		return minted;
 	}
+	const { token } = minted;
 
 	const { owner, repo } = getScratchRepo();
 	const blobResponse = await githubRequest(
 		token,
 		`/repos/${owner}/${repo}/git/blobs/${sha}`,
-		{ headers: { accept: "application/vnd.github.raw" } },
+		{ headers: { accept: "application/vnd.github.raw+json" } },
 	);
 
 	if (blobResponse.status === 404 || blobResponse.status === 422) {
@@ -60,6 +55,14 @@ export async function GET(request: Request) {
 	if (!blobResponse.ok) {
 		return Response.json(
 			{ error: `Failed to check blob ${sha}: ${blobResponse.status}` },
+			{ status: 502 },
+		);
+	}
+
+	const contentType = blobResponse.headers.get("content-type") ?? "";
+	if (contentType.includes("application/json")) {
+		return Response.json(
+			{ error: `Blob ${sha} came back as a JSON envelope, not raw bytes` },
 			{ status: 502 },
 		);
 	}

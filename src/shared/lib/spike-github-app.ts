@@ -16,6 +16,9 @@ import { createSign, timingSafeEqual } from "node:crypto";
 
 const GITHUB_API_ROOT = "https://api.github.com";
 
+/** A Git object SHA-1 (40 hex) or SHA-256 (64 hex), lowercase. Shared by every route that interpolates a caller-supplied SHA into a GitHub API path, so a malformed or path-traversing value never reaches an authenticated request. */
+export const SHA_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
 /** A PEM commonly survives an environment-variable field with literal `\n` two-character sequences instead of newlines. */
 function normalizePrivateKey(rawKey: string): string {
 	return rawKey.includes("\\n") ? rawKey.replaceAll("\\n", "\n") : rawKey;
@@ -56,16 +59,17 @@ export interface ScratchRepo {
 	repo: string;
 }
 
-/** Parses `SPIKE_SCRATCH_REPO` (`owner/repo`) into its two parts. */
+/** Parses `SPIKE_SCRATCH_REPO` (`owner/repo`, exactly one slash) into its two parts. */
 export function getScratchRepo(): ScratchRepo {
 	const value = process.env.SPIKE_SCRATCH_REPO;
 	if (!value) {
 		throw new Error("SPIKE_SCRATCH_REPO is not configured");
 	}
-	const [owner, repo] = value.split("/");
-	if (!owner || !repo) {
+	const parts = value.split("/");
+	if (parts.length !== 2 || !parts[0] || !parts[1]) {
 		throw new Error("SPIKE_SCRATCH_REPO must be in owner/repo form");
 	}
+	const [owner, repo] = parts;
 	return { owner, repo };
 }
 
@@ -136,6 +140,24 @@ export async function mintInstallationToken(): Promise<MintedToken> {
 	const minted = (await tokenResponse.json()) as { token: string };
 
 	return { token: minted.token, ms: performance.now() - start };
+}
+
+/**
+ * `mintInstallationToken`, wrapped so every route can handle failure the
+ * same way: `instanceof Response` means mint failed and the caller should
+ * return that response as-is; otherwise it is the minted token.
+ */
+export async function mintInstallationTokenOrError(): Promise<
+	MintedToken | Response
+> {
+	try {
+		return await mintInstallationToken();
+	} catch {
+		return Response.json(
+			{ error: "Failed to mint installation access token" },
+			{ status: 502 },
+		);
+	}
 }
 
 /**

@@ -2,8 +2,8 @@ import {
 	getScratchRepo,
 	githubRequest,
 	guardSpikeRequest,
-	mintInstallationToken,
-} from "../github-app";
+	mintInstallationTokenOrError,
+} from "@/shared/lib/spike-github-app";
 
 /**
  * Throwaway measurement scaffolding for issue #6, deleted before the pull
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
 	const uploadId = request.headers.get("x-spike-upload-id");
 	const chunkIndexHeader = request.headers.get("x-spike-chunk-index");
-	if (!uploadId || chunkIndexHeader === null) {
+	if (!uploadId || !chunkIndexHeader) {
 		return Response.json(
 			{ error: "Missing x-spike-upload-id or x-spike-chunk-index header" },
 			{ status: 400 },
@@ -42,18 +42,16 @@ export async function POST(request: Request) {
 
 	const chunk = await request.arrayBuffer();
 	const bytes = chunk.byteLength;
-	const content = Buffer.from(chunk).toString("base64");
 
-	let token: string;
-	let tokenMint: number;
-	try {
-		({ token, ms: tokenMint } = await mintInstallationToken());
-	} catch {
-		return Response.json(
-			{ error: "Failed to mint installation access token" },
-			{ status: 502 },
-		);
+	const encodeStart = performance.now();
+	const content = Buffer.from(chunk).toString("base64");
+	const encodeMs = performance.now() - encodeStart;
+
+	const minted = await mintInstallationTokenOrError();
+	if (minted instanceof Response) {
+		return minted;
 	}
+	const { token, ms: tokenMint } = minted;
 
 	const { owner, repo } = getScratchRepo();
 	const blobStart = performance.now();
@@ -81,6 +79,6 @@ export async function POST(request: Request) {
 		index,
 		bytes,
 		blobSha: blob.sha,
-		ms: { total, tokenMint, blobCreate },
+		ms: { total, tokenMint, encodeMs, blobCreate },
 	});
 }

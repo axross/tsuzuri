@@ -1,4 +1,4 @@
-import { guardSpikeRequest } from "../github-app";
+import { guardSpikeRequest } from "@/shared/lib/spike-github-app";
 
 /**
  * Throwaway measurement scaffolding for issue #6, deleted before the pull
