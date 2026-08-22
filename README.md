@@ -26,7 +26,7 @@ constraints, and the decisions are in place; the product behaviour is not.
 | Unit tests | Vitest |
 | E2E tests | Playwright |
 | Data / content layer | the linked GitHub repository, read and written through the GitHub API |
-| Hosting | Vercel |
+| Hosting | Cloudflare Workers, via `@opennextjs/cloudflare` |
 | Client state | Zustand |
 | Validation | Zod |
 | Styling | CSS Modules |
@@ -34,7 +34,7 @@ constraints, and the decisions are in place; the product behaviour is not.
 | Components | Base UI (headless), composed with clsx |
 | Internationalization | next-intl — one locale, `en`, structured to extend |
 | Error tracking | Sentry |
-| Logging | Pino, to stdout, read by Vercel Runtime Logs |
+| Logging | Pino, to stdout — not yet adapted to the Workers runtime; replacing it is a separate, still-open decision (see [the logger decision record](./docs/decisions/2026-08-22-build-the-logger-on-the-platform-console-rather-than-on-pino.md)) |
 
 ## Getting started
 
@@ -54,13 +54,18 @@ file carries variable **names** only — real values never enter the repository,
 and `.gitignore` keeps `.env.local` out. In a cloud agent session
 [`session-start.sh`](./.claude/hooks/session-start.sh) materializes it for you.
 
-Two repository secrets sets are configured by an operator rather than a
-contributor, and both are optional until someone wants what they enable:
+Repository secrets are configured by an operator rather than a contributor,
+and every one of them is optional until someone wants what it enables:
 `CLAUDE_CODE_OAUTH_TOKEN` for the CI reviewer (see
-[`claude-review.yaml`](./.github/workflows/claude-review.yaml)), and
-`VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` for preview deployments
-(see
-[docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md)).
+[`claude-review.yaml`](./.github/workflows/claude-review.yaml)); the pair
+`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`, which arms both the preview
+and the production deployment pipelines (see
+[docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md)
+and
+[docs/operations/production-deployment.md](./docs/operations/production-deployment.md));
+and `SENTRY_AUTH_TOKEN`, which gates only the production build's client
+source-map upload — its absence degrades that build rather than blocking a
+deployment.
 
 ## Development workflow
 
@@ -114,16 +119,30 @@ is the same reviewer the change loop requests for itself.
 
 ### Preview environments — review every PR live
 
-Each pull request gets its own preview deployment behind a **stable per-PR
-link**, posted to the pull request as a fresh comment on every deploy (each
-recording the deployed commit) and torn down when the pull request closes. The
-pipeline is inert until the three Vercel secrets above are configured; see
+Each pull request gets its own preview deployment as a **named Cloudflare
+Worker**, `tsuzuri-pr-<number>`, posted to the pull request as a fresh comment
+on every deploy (each recording the deployed commit) and torn down when the
+pull request closes. The pipeline is inert until the two Cloudflare secrets
+above are configured; see
 [docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md)
-for arming it and for the one case where a preview URL shows something other
-than the branch head.
+for arming it, the one-time operator setup, and the one case where a preview
+URL shows something other than the branch head.
 
 Changes made without an agent follow the same bar: branch, implement, run the
 checks below, open a pull request, and get it reviewed before merge.
+
+### Production deployment and the release
+
+Deploying to production and cutting a release both happen in one workflow, run
+only when an operator dispatches it by hand — never on a push, never on a
+published release. The same run cuts a release with semantic-release (staying
+inside `0.x`) and then deploys the default branch's head to the production
+Worker. It is inert the same way the preview pipeline is: with the Cloudflare
+secrets absent the release still runs but the deploy is skipped, and the
+workflow still concludes green. See
+[docs/operations/production-deployment.md](./docs/operations/production-deployment.md)
+for the one-time operator setup this needs, which the pipeline cannot
+complete on its own.
 
 ## Testing
 
@@ -147,12 +166,26 @@ before opening a pull request that touches a rendered surface.
 | Type-check | `npm run typecheck` |
 | Unit tests | `npm run test:unit` |
 | E2E tests | `npm run test:e2e` |
+| Build the Worker | `npm run build:worker` |
+| Deploy the Worker | `npm run deploy:worker` |
 
 This table is the authoritative list of the project's commands, for human
 contributors and agents alike. Run format and lint after every change, and the
 suites relevant to the changed surface before opening a pull request; the
 `software-development` skill owns why, and [`AGENTS.md`](./AGENTS.md) requires
 reading this file before running any of them.
+
+The last two are not gating checks; they exist for deploying to Cloudflare
+Workers. `npm run build:worker` runs the OpenNext CLI (`opennextjs-cloudflare
+build`), which runs `next build` and then transforms `.next/standalone` into
+the `.open-next/` directory Wrangler deploys — the same build both deployment
+pipelines run in CI. `npm run deploy:worker` runs the OpenNext CLI's `deploy`
+command, which deploys an *already-built* `.open-next/` output through
+Wrangler — run `build:worker` first, as both pipelines do. It needs
+`CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ACCOUNT_ID` in the environment, so a contributor runs it
+directly only to push a personal or throwaway Worker for manual testing — the
+pipelines are what deploy the preview and production Workers day to day.
 
 If a required command cannot be run, say so — naming the command, the reason,
 and the residual risk — rather than presenting the change as fully verified.
