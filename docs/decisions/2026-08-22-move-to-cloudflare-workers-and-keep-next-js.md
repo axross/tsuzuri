@@ -221,7 +221,9 @@ read 2026-08-22). OpenNext's recommended incremental-cache configuration
 binds a Durable Object for time-based revalidation, and moving that Durable
 Object into a separate multi-worker setup does not recover Preview URLs
 either — OpenNext's own multi-worker guide states that shape "cannot be
-used with: Preview URLs (staging deployments)." Preview URLs also carry no
+used with: Preview URLs (staging deployments)"
+([Multi-worker](https://opennext.js.org/cloudflare/howtos/multi-worker),
+read 2026-08-22). Preview URLs also carry no
 logs at all: "You cannot view logs for Preview URLs today, this includes
 Workers Logs, Wrangler tail and Logpush." Issue #70 is where the
 per-pull-request preview pipeline gets rebuilt around this constraint.
