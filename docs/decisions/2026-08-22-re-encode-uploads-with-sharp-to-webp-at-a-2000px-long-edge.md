@@ -38,11 +38,11 @@ phone photograph of a detailed street scene does not. Sizing the policy against
 the biggest *file* would have been the wrong instinct.
 
 The worst peak `sharp` reached in any run was 779 MB, on the 54 MB photograph
-encoded to AVIF; the AVIF table below carries the rest. Against the memory a
-function on this plan gets by default that leaves well over half unused, and
-the plan's maximum is twice the default again, so there is a second lever
-before this becomes a constraint. Duration is not close to a limit either: the
-slowest WebP run was 1.6 s against a ceiling measured in minutes. One rejected
+encoded to AVIF; the AVIF table below carries the rest. A function on this
+plan gets **2 GB** by default and can be configured up to **4 GB**, so the
+worst case leaves around 1.2 GB unused and there is a second lever beyond
+that. Duration is not close to a limit either: the slowest WebP run was 1.6 s
+against a **300 s** default, itself raisable to **800 s**. One rejected
 candidate ran hotter than `sharp` ever did — see `@cf-wasm/photon` below — so
 779 MB is the chosen encoder's ceiling, not the spike's.
 
@@ -90,17 +90,29 @@ hatches remain — a per-codec literal `new URL(...)`, or enabling asynchronous
 WebAssembly in the framework configuration — so this is a "not without extra
 configuration", not a "never". It also has no GIF decoder at all.
 
-**`@cf-wasm/photon` 0.4.0 ignores quality.** It runs, and it is the fastest of
-the four, but its WebP encoder takes no quality argument and emits something
-close to lossless: the 44.7 KB photograph came back at 369 KB, and the
-12-megapixel one at 4.02 MB — four times the target rather than under it. It
-also exposes no AVIF encoder. Its peaks ran higher than `sharp`'s throughout —
-666 MB on the 44.7 KB photograph, 768 MB on the screenshot, the transparent
-logo and the GIF alike, 833 MB on the 54 MB photograph, and 869 MB on the
-12-megapixel one, which is the highest figure this spike recorded from any
-encoder. It dropped the GIF's animation too, returning a single 300×200 frame
-where `sharp` returned all fifteen. Speed is not worth an encoder that cannot
-hit the size the whole design depends on.
+**`@cf-wasm/photon` 0.4.0 ignores quality.** It runs, but its WebP encoder
+takes no quality argument and emits something close to lossless. It also
+exposes no AVIF encoder. In full, against the same six inputs:
+
+| Input | Output | Duration | Peak RSS |
+| ----- | ------ | -------- | -------- |
+| Photograph, 54.3 MB | 3.39 MB | 6.1 s | 833 MB |
+| Phone photograph, 4.3 MB | 4.02 MB | 1.7 s | 869 MB |
+| Screenshot, 757 KB | 900 KB | 0.1 s | 768 MB |
+| Logo with transparency, 111 KB | 152 KB | 0.7 s | 768 MB |
+| Animated GIF, 568 KB | 35 KB, 1 frame | 0.004 s | 768 MB |
+| Small photograph, 44.7 KB | 369 KB | 0.07 s | 666 MB |
+
+Three of the six came out **larger** than they went in. The two photographs
+missed the target by three and four times over. Its 869 MB peak is the highest
+figure this spike recorded from any encoder, and it dropped the GIF's
+animation, returning a single 300×200 frame where `sharp` returned all fifteen
+— which is why that row is both the smallest output and the fastest run in the
+table. It is quick on small inputs, and only on those: it beats `sharp` on the
+screenshot, the GIF, and the small photograph, and loses badly where it
+matters, taking 6.1 s on the 54 MB photograph against `sharp`'s 1.6 s. Speed
+on the easy inputs is not worth an encoder that cannot hit the size the whole
+design depends on.
 
 `@squoosh/lib` was excluded without measurement; its most recent release is
 from January 2023.
@@ -108,11 +120,11 @@ from January 2023.
 What each candidate costs in bundle size, summed from the build's own
 dependency trace on a local build: `sharp` 46.74 MB, `@jsquash/*` 9.90 MB,
 `wasm-vips` 6.74 MB, `@cf-wasm/photon` 3.73 MB. `sharp` is by far the largest
-because it ships a native libvips binary, and it is still an order of magnitude
-under the platform's uncompressed bundle ceiling. All four deployed
-successfully, which is the deployed evidence that none of them exceeds it; the
-per-candidate split is a local measurement, because the deploy does not print
-per-function sizes.
+because it ships a native libvips binary, and at 46.74 MB it still uses under
+a fifth of the platform's **250 MB** uncompressed bundle ceiling. All four
+deployed successfully, which is the deployed evidence that none of them
+exceeds it; the per-candidate split is a local measurement, because the deploy
+does not print per-function sizes.
 
 ## What Happens to Each Kind of Input
 
