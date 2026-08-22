@@ -13,48 +13,75 @@ a Redis store provisioned through the Vercel Marketplace, and a private
 Vercel Blob store. That record priced a fourth external vendor and recorded
 that no ceiling had been imposed on the number.
 
-Later the same day the maintainer imposed one, and it is tighter than a
-vendor count. No new vendor, and no Vercel metered storage product either.
-What is left is the GitHub repository this application already treats as its
-source of truth, and the surface the existing Vercel plan already carries:
-the CDN cache, Functions, and the Runtime Cache. This record re-derives all
-three placements inside that boundary and supersedes the earlier one.
+Later the same day the maintainer imposed one. This record re-derives all
+three placements under it and supersedes the earlier one.
 
 The answer it lands on is that **none of the three needs a store**. Session
 state travels in an encrypted cookie, API-key verifiers are committed to the
 linked repository, and media is served by a route handler this application
-owns with nothing behind it but the CDN cache and GitHub. The external
-vendor count stays at the three `README.md` already names.
+owns with nothing behind it but a cache and GitHub. No new external vendor
+is added.
 
-That is a larger claim than "we found cheaper products", so the reasoning
-below is organised around the two arguments the superseded record rested on
-— that per-key revocation forces a store, and that no caching primitive can
-be one — and what changed under each.
+## Why this record names no platform in its decision
+
+Hosting is being re-decided in parallel with this.
+`2026-08-21-host-on-vercel-and-split-media-transfer.md` is accepted and
+Vercel is what `README.md` states, while a separate open change would record
+a move to Cloudflare Workers and supersede it. A record that assumed either
+outcome would be wrong the moment the other landed, and
+`2026-08-22-build-the-logger-on-the-platform-console-rather-than-on-pino.md`
+already met this problem and solved it the right way: state the property the
+decision actually needs, so the record does not depend on the merge order of
+an unrelated one.
+
+So the decision below is about **placement** — which authority owns each
+kind of state, and what may stand in front of it. Placement is a property of
+the architecture rather than of the host. The concrete primitive that
+implements each placement is named per platform, in a table, and those
+tables are the only part of this record a hosting change touches.
+
+Two constraint lines were settled with the maintainer, and they are not the
+same line:
+
+- **On Vercel:** no new vendor, and no Vercel metered storage product.
+  Vercel Blob and Vercel Global Config are excluded by the constraint rather
+  than by their merits.
+- **On Cloudflare Workers:** the platform's own storage products — Workers
+  KV, R2, Durable Objects — are permitted.
+
+The difference is real and worth naming rather than smoothing over, because
+a reader will see it: Vercel Blob bills through the Vercel account in the
+same way Workers KV bills through the Cloudflare account, so the two
+products stand in the same relation to their host. This record takes both
+lines as the maintainer set them rather than reconciling them.
+
+What saves the asymmetry from mattering is that it changes no outcome. Every
+Cloudflare storage product the wider line admits is rejected below on its
+own documented behaviour — not on the constraint — so the placements are the
+same whichever platform this project is hosted on, and the same whichever
+line applies.
 
 ## What the maintainer settled, and what each answer reverses
 
-Four decisions were put to the maintainer on 2026-08-22 before this work
-began. Three of them reverse a constraint issue #3 had recorded as settled.
-
 | Settled now | What it reverses |
 | --- | --- |
-| No new vendor, and no Vercel metered storage product. Vercel Blob and Vercel Global Config are excluded by the constraint, not by their merits. | Issue #3's "no vendor ceiling is imposed up front." |
+| No new vendor, and no Vercel metered storage product. | Issue #3's "no vendor ceiling is imposed up front." |
+| On Cloudflare Workers, the platform's own storage products are permitted. | Nothing; the question did not exist when issue #3 ran. |
 | A few seconds of API-key revocation delay is acceptable. | Issue #3's "per-key revocation with no tolerated window," which was the single premise that forced a store. |
-| A key's last use is recorded at the granularity of a day, not a timestamp per request. | Issue #32's acceptance criterion, which implies a per-request write. |
+| A key's last use is recorded at the granularity of a day, not a timestamp per request. | Issue #32's acceptance criteria, in two places — see the API-key section. |
 | The session-token placement is recommended here and decided by the maintainer at this record's review. | Nothing; it is how issue #3 handled the vendor count too. |
 
 A wider revocation window — a cache TTL's worth, tens of seconds — was
 offered and not chosen. "Seconds" is therefore the ceiling this record
-designs against, and the sections below state what the design does when it
-cannot meet that.
+designs against, and each section states what the design does when it cannot
+meet that.
 
-The constraint is not new ground.
+The Vercel line is not new ground.
 `docs/conventions/github-platform-limits.md` § "Do Not Use Git LFS" already
 rules LFS out partly because its quotas "bill past 10 GiB, which contradicts
 this project's premise of adding no paid storage layer." That premise was
 written down before the superseded record was drafted, and that record
-neither cited it nor reconciled with it. What follows is a return to a
-stated premise rather than a new preference.
+neither cited it nor reconciled with it.
 
 ## Whether per-key revocation still forces a store
 
@@ -66,9 +93,9 @@ was the width of the tolerated window, and that has moved.
 
 With seconds allowed, the question stops being "store or no store" and
 becomes "what is authoritative, and how fast does a change to it reach the
-verifier." The linked repository is already the authoritative record of
-everything else this application serves, it is reachable from a Function, it
-is writable through the commit path
+verifier." The linked repository is already authoritative for everything
+else this application serves, it is reachable from a server-side handler on
+either platform, it is writable through the commit path
 `docs/conventions/github-platform-limits.md` already mandates, and a write
 to it already fires the `push` webhook this project uses as its invalidation
 signal. It is a store in every sense that matters here — it is just not a
@@ -85,7 +112,7 @@ So the superseded record's argument survives intact and stops being
 decisive: revocation does need something the verifier consults, and this
 application already has one.
 
-## Whether a caching primitive can be the media store
+## Whether a cache can carry media
 
 Here the superseded record's reasoning also survives, and this record
 reaches a different conclusion by asking a different question. That record
@@ -96,19 +123,19 @@ authoritative store already:
 put the bytes in the linked repository, and
 `2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`
 settled that what lands there is already re-encoded and already small.
-Nothing downstream of that needs to be authoritative. It needs to be a
-cache, in front of an origin that exists.
+Nothing downstream of that has to be authoritative. It has to be a cache, in
+front of an origin that exists.
 
-Vercel's CDN cache is exactly that, and the objection the superseded record
-raised against it — that it "needs an origin to serve on a miss; it cannot
-be that origin itself" — is satisfied rather than violated by a route
-handler whose origin is GitHub.
+A CDN in front of a route handler is exactly that, and the objection the
+superseded record raised — that the CDN "needs an origin to serve on a miss;
+it cannot be that origin itself" — is satisfied rather than violated when
+the origin is a handler that reads GitHub.
 
-Two of the superseded record's findings still hold and are not re-litigated
-here: Incremental Static Regeneration's cache does not carry across
-deployments, and Vercel steers "Complete HTTP responses (images, fonts,
-etc.)" away from the data cache and toward the CDN cache. Both are quoted
-with their sources in that record, which stays readable.
+Two of that record's findings still hold and are not re-litigated here:
+Incremental Static Regeneration's cache does not carry across deployments,
+and Vercel steers "Complete HTTP responses (images, fonts, etc.)" away from
+the data cache and toward the CDN cache. Both are quoted with their sources
+there, and that record stays readable.
 
 ## Session state: an encrypted cookie, and no server-side record
 
@@ -120,7 +147,11 @@ cookie keeps every attribute the existing conventions and
 `2026-08-22-carry-the-reader-session-in-a-cross-site-cookie.md` already
 require of it.
 
-Three properties of the surrounding design are what make this defensible
+This placement needs no platform-specific primitive at all: a cookie is an
+HTTP mechanism, and both candidate platforms run the same encryption in the
+same handler.
+
+Three properties of the surrounding design are what make it defensible
 rather than merely cheap.
 
 **The session's ceiling is already eight hours.** A GitHub App user access
@@ -151,47 +182,75 @@ compromise needs.
 
 **Rejected candidates:**
 
-- **A server-side session record in the Vercel Runtime Cache.** This was the
-  only candidate inside the constraint that would have preserved the
-  existing convention untouched, and Vercel's own documentation rules it out
-  for this use. The Runtime Cache page lists what it "is not a good fit for"
-  and names "User-specific data that differs for each request" first — which
-  is what a session record is. It is also "Regional: Each region has its own
+- **A server-side record in the host's shared cache** — Vercel's Runtime
+  Cache, or Cloudflare's Cache API. Rejected on both vendors' own
+  documentation. Vercel lists what the Runtime Cache "is not a good fit for"
+  and names "User-specific data that differs for each request" first, which
+  is what a session record is; it is also "Regional: Each region has its own
   cache", so a session written where the user signed in is absent where
-  their next request lands, and "Ephemeral", evicted by a
-  least-recently-used policy when the cache fills, so a signed-in user is
-  signed out at a moment nothing in this application chose ([Runtime
+  their next request lands, and "Ephemeral", evicted least-recently-used
+  when the cache fills ([Runtime
   Cache](https://vercel.com/docs/caching/runtime-cache), read 2026-08-22).
-  Building sessions on a cache the vendor documents as unsuitable for them,
-  in order to avoid rewriting a convention, would be the worse trade.
+  Cloudflare's Cache API has the same locality problem in stronger terms —
+  "the contents of the cache do not replicate outside of the originating
+  data center" — and additionally never stores what a sign-in must set:
+  "Responses with `Set-Cookie` headers are never cached"
+  ([Cache](https://developers.cloudflare.com/workers/runtime-apis/cache/),
+  read 2026-08-22).
+- **A server-side record in Workers KV.** Permitted by the Cloudflare line
+  and rejected on its documented consistency. KV "achieves high performance
+  by being eventually-consistent", and "Changes may take up to 60 seconds or
+  more to be visible in other global network locations as their cached
+  versions of the data time out"; even locally, Cloudflare says immediate
+  visibility "is not guaranteed and therefore it is not advised to rely on
+  this behaviour", and negative lookups are cached too, "so the same delay
+  exists noticing a value is created as when a value is changed" ([How KV
+  works](https://developers.cloudflare.com/kv/concepts/how-kv-works/), read
+  2026-08-22). A user who has just signed in reading as signed out for a
+  minute is not a degraded session; it is a broken one. This is the
+  candidate that would have preserved `docs/conventions/security.md`
+  untouched, and it is rejected on the vendor's own words rather than on the
+  constraint.
+- **A server-side record in Durable Objects.** Permitted, strongly
+  consistent — "durable, transactional, and strongly consistent" — and
+  rejected on shape rather than on correctness. Each instance is
+  "single-threaded and cooperatively multi-tasked" and is "automatically
+  provisioned geographically close to where it is first requested" ([What
+  are Durable
+  Objects?](https://developers.cloudflare.com/durable-objects/what-are-durable-objects/),
+  read 2026-08-22), so every request carrying a session would route to one
+  pinned location, and a reader on the far side of the world would pay that
+  trip on every call. It is also unambiguously a store, which is the thing
+  this record exists to avoid adding; adopting it would need an argument
+  stronger than "it would let a convention stay as written."
 - **A session record in the linked repository.** Sessions are per-reader and
   per-author, not per-blog, so there is no repository that owns one; and a
   write per sign-in runs straight into the six-pushes-per-minute
   recommendation `docs/conventions/github-platform-limits.md` records.
   Rejected on its merits.
 - **A Vercel Marketplace key-value store**, the superseded record's choice.
-  **Excluded by the constraint**, not by its merits — it remains a good fit
-  for the shape of the data. Recorded here so the exclusion is legible:
-  Upstash's own pricing page states a free tier of "256 MB" data, "500K"
-  monthly commands and "10 GB" monthly bandwidth, and that "The database is
-  deleted after 3 days unless you claim it into your account from the
-  console link" ([Upstash Redis pricing](https://upstash.com/pricing/redis),
-  read 2026-08-22). Even had free-tier third parties been permitted, that
+  **Excluded by the Vercel line**, not by its merits — it remains a good fit
+  for the shape of the data. Recorded so the exclusion is legible: Upstash's
+  own pricing page states a free tier of "256 MB" data, "500K" monthly
+  commands and "10 GB" monthly bandwidth, and that "The database is deleted
+  after 3 days unless you claim it into your account from the console link"
+  ([Upstash Redis pricing](https://upstash.com/pricing/redis), read
+  2026-08-22). Even had free-tier third parties been permitted, that
   deletion policy is a poor custodian for anything whose loss is not a
   rebuild.
-- **Vercel Global Config.** **Excluded by the constraint**, and
-  independently unsuitable: its "Maximum store size" is "1 MB" on every plan
-  including Pro, and a write takes "Up to 10 seconds globally" to propagate,
-  with the page warning to "avoid using Global Configs for frequently
-  updated data or data that needs to be accessed immediately after updating"
-  ([Global Config Limits and
+- **Vercel Global Config.** Excluded by the Vercel line, and independently
+  unsuitable: its "Maximum store size" is "1 MB" on every plan including
+  Pro, and a write takes "Up to 10 seconds globally" to propagate, with the
+  page warning to "avoid using Global Configs for frequently updated data or
+  data that needs to be accessed immediately after updating" ([Global Config
+  Limits and
   pricing](https://vercel.com/docs/global-config/global-config-limits), read
   2026-08-22). A store that grows with every login fits neither.
 
-**Cost model.** No store, so no storage cost. The cookie adds bytes to every
-request that carries it; on the reader path those requests are cross-site
-and the cookie is sent with them, which is a bandwidth cost rather than a
-billed product.
+**Cost model.** No store, so no storage cost on either platform. The cookie
+adds bytes to every request that carries it; on the reader path those
+requests are cross-site and the cookie is sent with them, which is a
+bandwidth cost rather than a billed product.
 
 **Adds a vendor: no.**
 
@@ -235,8 +294,8 @@ committed to the linked repository under a reserved dot-path
 (`.tsuzuri/api-keys.json`), through the same commit path
 `docs/conventions/github-platform-limits.md` mandates for a text-only
 change. Issuing appends an entry; revoking deletes one. The verifier fails
-closed: a record the verifier cannot find is an invalid key, never an
-unrestricted one.
+closed: a record it cannot find is an invalid key, never an unrestricted
+one.
 
 **The key itself is 256 bits of randomness, so the stored hash is plain
 SHA-256 with no secret in it.** A slow key-derivation function protects
@@ -246,25 +305,37 @@ key a blog ever issued. Keeping the hash self-contained is what lets the
 repository remain sufficient on its own — an author can read their own key
 list, and nothing outside their account is needed to verify against it.
 
-**Two reads and one window.** A verifier list is read through two cache
-tiers: the Runtime Cache, keyed per blog and tagged so a revocation can
-expire it, and a very short-lived in-process tier inside each Function
-instance that bounds the worst case when a tag expiry has not reached a
-region. Revoking runs inside this application's own Function, so it commits
-the deletion *and* expires the tag in the same operation rather than waiting
-for the webhook — so a request served by the region that ran the revoke is
-rejected immediately. Elsewhere the delay is bounded by the in-process
-tier's TTL, because whether a tag expiry reaches another region promptly is
-one of the figures this record leaves unverified below. The `push` webhook
-covers the other path, an author editing the file by hand, and that same TTL
-is the floor under both.
+**Reading it, and the width of the window.** A verifier list is read through
+two cache tiers: a shared tier the platform provides, and a very short-lived
+in-process tier inside each isolate or Function instance that bounds the
+worst case when the shared tier has not caught up. Revoking runs inside this
+application's own handler, so it commits the deletion *and* invalidates the
+shared entry in the same operation rather than waiting for the webhook — a
+request served by the same location is rejected immediately. Elsewhere the
+delay is bounded by the in-process tier's TTL, because how promptly an
+invalidation reaches another location is platform-specific and, on both
+candidate platforms, either unverified or documented as slow. The `push`
+webhook covers the other path, an author editing the file by hand, and that
+same TTL is the floor under both.
+
+| | Vercel | Cloudflare Workers |
+| --- | --- | --- |
+| Shared cache tier | Runtime Cache, tagged per blog | Cache API, per data centre |
+| Invalidation on revoke | tag expiry; cross-region propagation unverified | per data centre only; other locations wait out the TTL |
+| Per-instance tier | in-process, short TTL | in-isolate, short TTL |
+
+Workers KV is the obvious shared tier on Cloudflare and is **not** used, for
+the reason the session section gives: a revocation that takes "up to 60
+seconds or more" to become visible elsewhere is outside the window the
+maintainer set, and KV's cached negative lookups mean a re-issued key is
+subject to the same delay.
 
 **What happens when the signal is lost.** A `push` webhook that never
 arrives leaves a hand-edited revocation in place only until the cached entry
 expires. A GitHub outage leaves cached entries verifying until they expire
 and then fails closed, so an outage degrades to rejecting keys rather than
 to accepting revoked ones. Neither failure can widen the window past the
-shorter cache tier's TTL.
+shorter tier's TTL.
 
 **Last use, at the granularity settled with the maintainer.** A key records
 the *date* it was last used, not a timestamp per request, and the write is
@@ -310,19 +381,27 @@ none of it.
   the reason the superseded record gave, which still holds: the revocation
   list is itself the thing the verifier must consult, so the design is this
   one with a signature scheme added on top. Its real benefit — verifying
-  without a lookup, by tolerating a revocation delay — is a benefit this
-  design already takes, through the cache tiers, without the extra scheme.
-- **The Runtime Cache as the authoritative home.** Rejected on its merits,
-  and emphatically: it is documented as "Ephemeral", LRU-evicted when full
-  ([Runtime Cache](https://vercel.com/docs/caching/runtime-cache), read
-  2026-08-22). An evicted verifier is an issued key that stops working, and
-  which scopes it carried would be recoverable from nowhere. It is used
-  above only as a cache in front of an authoritative file.
-- **Vercel Global Config.** Excluded by the constraint, and independently
+  without a lookup, by tolerating a revocation delay — is one this design
+  already takes, through the cache tiers, without the extra scheme.
+- **The host's shared cache as the authoritative home.** Rejected on its
+  merits, and emphatically: Vercel's Runtime Cache is documented as
+  "Ephemeral", LRU-evicted when full, and Cloudflare's Cache API does not
+  replicate outside one data centre. An evicted verifier is an issued key
+  that stops working, and which scopes it carried would be recoverable from
+  nowhere. Both are used above only as caches in front of an authoritative
+  file.
+- **Workers KV as the authoritative home.** Permitted by the Cloudflare line
+  and rejected on the consistency figures quoted above. Its free-plan
+  ceilings would also bind sooner than they look — "1,000 writes per day"
+  across different keys, and "1 per second" writes to the same key ([Workers
+  KV limits](https://developers.cloudflare.com/kv/platform/limits/), read
+  2026-08-22) — though that is a secondary reason, not the one it is
+  rejected on.
+- **Vercel Global Config.** Excluded by the Vercel line, and independently
   unfit: its documented "Up to 10 seconds globally" write propagation is
   exactly the window a "revoke" action must not have, and its 1 MB ceiling
   is shared across every blog.
-- **A Vercel Marketplace store.** Excluded by the constraint, as above.
+- **A Vercel Marketplace store.** Excluded by the Vercel line, as above.
 
 **Cost model.** No store, so no storage cost. The reads and writes are
 GitHub API calls against the installation's own quota, which "starts at
@@ -336,9 +415,9 @@ rather than consuming this one's.
 lose.** This is the sharpest change from the superseded record, which called
 API-key loss "data loss, not a rebuild" and concluded on that basis that the
 project's no-persistence claim was broken. Under this placement the verifier
-list lives in the source of truth itself. Losing every cache costs a re-read.
-Losing the repository is the author losing their blog, which is a condition
-this application has never claimed to survive.
+list lives in the source of truth itself. Losing every cache costs a
+re-read. Losing the repository is the author losing their blog, which is a
+condition this application has never claimed to survive.
 
 **What this contradicts.** Nothing in `docs/conventions/security.md` §
 "Session Cookies Are This Application's, Not GitHub's". But § "There Is No
@@ -352,19 +431,19 @@ verification is rate-limited and per what.
 records the same obligation for the MCP tokens it mints; one rewrite can
 discharge both. Writing it is out of scope here.
 
-## Media: a route handler of our own, and the CDN cache behind it
+## Media: a route handler of our own, and the platform's CDN behind it
 
 **Chosen.** A request for media reaches a route handler on this
 application's own origin. On a cache hit the CDN answers and no code runs.
 On a miss the handler fetches the object from the linked repository through
-the installation token and returns it with a one-year `Cache-Control`.
-Nothing is stored anywhere.
+the installation token and returns it with a long `Cache-Control`. Nothing
+is stored anywhere.
 
-Content addressing is what makes a one-year TTL correct rather than
-reckless. `docs/conventions/github-platform-limits.md` already shards media
-by content hash, so a media URL names its bytes: the bytes behind a URL can
-never change, and an immutable response can be cached for as long as the
-platform allows. Vercel's maximum is "1 year" for `s-maxage`, `max-age`, and
+Content addressing is what makes a long TTL correct rather than reckless.
+`docs/conventions/github-platform-limits.md` already shards media by content
+hash, so a media URL names its bytes: what a URL resolves to can never
+change, and an immutable response can be cached for as long as the platform
+allows. Vercel's maximum is "1 year" for `s-maxage`, `max-age`, and
 `stale-while-revalidate` alike ([Vercel CDN
 Cache](https://vercel.com/docs/caching/cdn-cache), read 2026-08-22).
 
@@ -372,9 +451,15 @@ The delivery rule this satisfies is
 `docs/conventions/github-platform-limits.md` § "Never Link
 `raw.githubusercontent.com`", which requires media to be delivered through
 this application's own cache layer on its own origin. A route handler on our
-own origin satisfies it by construction — which is worth noting, because the
+own origin satisfies it by construction — worth noting, because the
 superseded record had to reach for Vercel Blob's more expensive private mode
 to satisfy the same rule against a Vercel-owned hostname.
+
+| | Vercel | Cloudflare Workers |
+| --- | --- | --- |
+| Cache in front | CDN cache, via `Cache-Control` / `Vercel-CDN-Cache-Control` | the zone's CDN, with the Cache API available to the handler |
+| Origin on a miss | the route handler, reading GitHub | the same |
+| Store | none | none |
 
 **Two consequences worth stating before anyone is surprised by them.**
 
@@ -386,32 +471,46 @@ The first is that Vercel will not cache a response to a request carrying an
 surface issue #37 covers — is cacheable and will be served from the CDN.
 Media for a blog that requires a key on every request is **not**
 CDN-cacheable while the key travels in `Authorization`, so those requests
-reach the Function and GitHub every time. That is a real limit on the
+reach the handler and GitHub every time. That is a real limit on the
 private-repository case and it belongs in the design of the key-bearing
-media path, not in a footnote.
+media path, not in a footnote. Whether Cloudflare draws the same line is
+recorded as unverified below; what its Cache API documentation does state is
+that "Responses with `Set-Cookie` headers are never cached"
+([Cache](https://developers.cloudflare.com/workers/runtime-apis/cache/),
+read 2026-08-22), so the media path must set no cookie on either platform.
 
-The second is that the CDN is a cache and says so: "cache times are
-best-effort and not guaranteed. If an asset is requested often, it is more
-likely to live the entire duration. If your asset is rarely requested (e.g.
-once a day), it may be evicted from the regional cache" (same citation), and
-the cache is segmented by region. A cold or evicted object costs one GitHub
-read. This is compatible with § "Never Read GitHub Per Request" — reads are
-proportional to cache misses, not to page views, and an immutable one-year
-entry makes a miss a rare event — but it is not the webhook-driven zero that
-section describes, and the honest statement is that media reads are
-miss-driven rather than edit-driven.
+The second is that a CDN is a cache and says so. Vercel's page is explicit:
+"cache times are best-effort and not guaranteed. If an asset is requested
+often, it is more likely to live the entire duration. If your asset is
+rarely requested (e.g. once a day), it may be evicted from the regional
+cache", and the cache is segmented by region ([Vercel CDN
+Cache](https://vercel.com/docs/caching/cdn-cache), read 2026-08-22).
+Cloudflare's Cache API is segmented more sharply still, not replicating
+outside the originating data centre. A cold or evicted object costs one
+GitHub read. This is compatible with § "Never Read GitHub Per Request" —
+reads are proportional to cache misses, not to page views, and an immutable
+long-lived entry makes a miss a rare event — but it is not the
+webhook-driven zero that section describes, and the honest statement is that
+media reads are miss-driven rather than edit-driven.
 
 **Rejected candidates:**
 
 - **A Vercel Blob store**, the superseded record's choice, in its private
-  mode. **Excluded by the constraint.** Its own pricing page describes what
+  mode. **Excluded by the Vercel line.** Its own pricing page describes what
   the exclusion costs: within the Pro plan Blob usage draws on the "monthly
   credit allocation", and only past that is it on-demand ([Vercel Blob
   Pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing), read
   2026-08-22). It would have bought lower-latency misses and a store that
   never re-reads GitHub. It is excluded, not refuted.
-- **The Runtime Cache as a second tier under the CDN.** Rejected on the
-  vendor's own guidance: the Runtime Cache page names "Complete HTTP
+- **Cloudflare R2.** Permitted by the Cloudflare line and rejected as
+  unnecessary rather than unfit. It is the closest analogue to the Blob
+  store above and would work; what it would add is a second copy of bytes
+  the linked repository already holds, kept in sync by us, in exchange for
+  turning a rare cache miss into a slightly cheaper one. Nothing in the
+  media path asks for that, and the superseded record's own reasoning — that
+  media's only real problem is delivery, not durability — argues against it.
+- **The Vercel Runtime Cache as a second tier under the CDN.** Rejected on
+  the vendor's own guidance: the Runtime Cache page names "Complete HTTP
   responses (use CDN cache instead)" among what it "is not a good fit for",
   and its item size caps at "2 MB" ([Runtime
   Cache](https://vercel.com/docs/caching/runtime-cache), read 2026-08-22).
@@ -420,10 +519,11 @@ miss-driven rather than edit-driven.
 - **The ISR cache** and **the Next.js Data Cache**, both rejected in the
   superseded record on grounds this record does not disturb.
 
-**Cost model.** No store, so no storage cost. Each miss costs one Function
-invocation, one Fast Origin Transfer, and one GitHub read; each hit costs
-one Edge Request. All three are billed at the CDN and Function rates the
-hosting decision already accepted.
+**Cost model.** No store, so no storage cost. Each miss costs one handler
+invocation, one origin transfer, and one GitHub read; each hit costs one
+edge request. All three are billed at whatever rates the hosting platform
+charges, which the hosting decision — whichever one stands — already
+accepted.
 
 **Adds a vendor: no.**
 
@@ -433,20 +533,22 @@ next request re-fetches them.
 
 ## Total vendor count, and what is billed anyway
 
-`README.md`'s tech-stack table already names three external vendors: GitHub,
-Vercel, and Sentry. **This decision adds none.** The total stays at three,
-where the superseded record made it four.
+`README.md`'s tech-stack table names three external vendors: GitHub, the
+hosting platform, and Sentry. **This decision adds none**, where the
+superseded record added a fourth. That holds whichever hosting decision
+stands, because the count is of vendors rather than of products, and every
+primitive named above belongs to a vendor this project already has.
 
 "No metered storage product" is not "no metered anything", and reading it
-that way would be wrong. Every recommendation above consumes billed Vercel
-resources: Function invocations and Active CPU, Edge Requests, Fast Origin
-Transfer on a cache miss, and — for the API-key verifier cache — the Runtime
-Cache, of which Vercel states plainly that "Usage of runtime cache is
-charged" ([Runtime Cache](https://vercel.com/docs/caching/runtime-cache),
-read 2026-08-22). What distinguishes these from the products excluded above
-is that they are the cost of running an application on Vercel at all, which
-`2026-08-21-host-on-vercel-and-split-media-transfer.md` already accepted,
-rather than a separate store provisioned and billed as its own thing.
+that way would be wrong. Every recommendation above consumes billed
+resources: handler invocations and CPU, edge requests, origin transfer on a
+cache miss, and — for the API-key verifier cache — the host's shared cache,
+of which Vercel states plainly that "Usage of runtime cache is charged"
+([Runtime Cache](https://vercel.com/docs/caching/runtime-cache), read
+2026-08-22). What distinguishes these from the products the Vercel line
+excludes is that they are the cost of running an application on a hosting
+platform at all, rather than a separate store provisioned and billed as its
+own thing.
 
 ## Two kinds of state this record does not place
 
@@ -468,8 +570,8 @@ The **short-lived record of commit OIDs this application wrote**, which
 the Webhook" requires so a write does not re-trigger its own webhook, has no
 home either. That section already argues it is cache-like and that losing it
 "costs at most one redundant, idempotent cache refresh", which makes the
-Runtime Cache an obvious fit — but obvious is not decided, and it is not
-decided here.
+host's shared cache an obvious fit — but obvious is not decided, and it is
+not decided here.
 
 ## Whether the no-persistence claim survives
 
@@ -489,14 +591,15 @@ from being recreated. The API-key verifiers are *in* the linked repository,
 which is where the claim already says the truth lives. **No carve-out is
 owed, and neither `README.md` nor `AGENTS.md` needs a rewrite.**
 
-Two things this application does hold are worth being precise about, so the
+One thing this application does hold is worth being precise about, so the
 claim is not read as more absolute than it is: the encryption key behind the
-session cookie, and — should the maintainer accept the recommendation above
-— nothing else. A key in environment configuration is not a persistence
-layer, and this project already holds several: the companion app's private
+session cookie. A key in environment configuration is not a persistence
+layer, and this project already holds several — the companion app's private
 key, and the MCP signing key
 `2026-08-22-be-our-own-authorization-server-and-serve-mcp-statelessly.md`
-introduced. This adds one more of the same kind.
+introduced. This adds one more of the same kind. That is an interpretation
+of `README.md`'s sentence rather than something the sentence settles, and it
+is stated here so it can be contested rather than absorbed.
 
 ## What this invalidates
 
@@ -514,11 +617,14 @@ and its account of the refresh token's role, on the same condition as the
 security convention above. Its cross-site cookie attributes, origin
 allowlist, anti-forgery token, `state`, and PKCE are untouched.
 
-Issue #32's acceptance criterion on recording a key's last use, which this
-record coarsens to a date.
+Two of issue #32's acceptance criteria, as the API-key section sets out.
 
 `README.md` and `AGENTS.md` — **not** invalidated, reversing the superseded
 record's finding.
+
+No hosting record, in either direction. This record is written so that
+neither the accepted Vercel decision nor a Cloudflare Workers decision
+replacing it changes what is decided here.
 
 ## What was not measured, and what is unverified
 
@@ -531,19 +637,26 @@ can change an internal without any test here catching it.
 
 Recorded as unverified rather than supplied from memory:
 
-- **Whether expiring a Runtime Cache tag propagates across regions, and how
-  quickly.** The page states each region has its own cache and that entries
-  can be invalidated "by calling `expireTag`", but says nothing about
-  cross-region propagation. The API-key revocation window depends on it. The
-  in-process TTL above is the design's answer to not knowing, and this is
-  the single figure most worth measuring before issue #32 ships.
+- **Whether expiring a Vercel Runtime Cache tag propagates across regions,
+  and how quickly.** The page states each region has its own cache and that
+  entries can be invalidated "by calling `expireTag`", but says nothing
+  about cross-region propagation. The API-key revocation window depends on
+  it, and it is the single figure most worth measuring before issue #32
+  ships.
+- **Whether Cloudflare declines to serve a cached response to a request
+  carrying an `Authorization` header, as Vercel documents that it does.**
+  The Cache API page does not address it. The key-bearing media path's cost
+  on Cloudflare is unknown until it is settled.
+- **Whether Durable Objects are available without a paid Workers plan.** The
+  page read does not say. Nothing here depends on it, since Durable Objects
+  are rejected on shape.
 - **The unit behind Vercel Global Config's Pro prices.** Its pricing table
   gives "$3.00" for reads and "$5.00" for writes with no unit stated on the
-  page. Nothing here depends on the number, since Global Config is excluded.
+  page. Nothing depends on it, since Global Config is excluded.
 - **Whether the Blob included allowances the superseded record quoted are
   the Pro ones.** That record recorded the same gap; nothing here depends on
   it.
-- **The Runtime Cache's storage limit.** The page states there is "a fixed
-  storage limit" per cache and that eviction is least-recently-used, without
-  giving the figure. How much verifier-cache pressure it takes to start
-  evicting is therefore not known.
+- **The Vercel Runtime Cache's storage limit.** The page states there is "a
+  fixed storage limit" per cache and that eviction is least-recently-used,
+  without giving the figure. How much verifier-cache pressure it takes to
+  start evicting is therefore not known.
