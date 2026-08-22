@@ -7,18 +7,18 @@ status: accepted
 `2026-08-21-host-on-vercel-and-split-media-transfer.md` accepted chunking
 media transfer as the price of the Vercel body cap, and left the chunk size,
 the intermediate store, the write sequence, and whether the download
-direction needed the same treatment as open questions for issue #6 to settle.
-That issue ran a spike that measured the mechanism end to end — a byte-exact
-bisect of the body cap, a joined 50 MB upload through to an attempted
-committed blob, a mid-upload abandonment, and both a buffered and a streamed
-download — on this pull request's preview deployment, against a throwaway
-scratch repository, `axross/tsuzuri-spike-scratch`, deleted once the
-measurement was reported. This record is written from that measurement. The
-maintainer chose a managed key-value store, reached through the Vercel
-Marketplace, as the place an in-flight upload's chunks live, over the
-alternatives weighed below — reusing the store #3 had already chosen for
-other project state, as the next section details, rather than adding a new
-one.
+direction needed the same treatment as open questions for issue #6 to
+settle. That issue ran a spike that measured the mechanism end to end — a
+byte-exact bisect of the body cap, a joined 50 MB upload through to an
+attempted committed blob, a mid-upload abandonment, and both a buffered and
+a streamed download — on this pull request's preview deployment, against a
+throwaway scratch repository, `axross/tsuzuri-spike-scratch`, created for
+the measurement and disposable once it was reported. This record is written
+from that measurement. The maintainer chose a managed key-value store,
+reached through the Vercel Marketplace, as the place an in-flight upload's
+chunks live, over the alternatives weighed below — reusing the store #3 had
+already chosen for other project state, as the next section details, rather
+than adding a new one.
 
 Vercel's own current documentation
 ([vercel.com/docs/functions/limitations](https://vercel.com/docs/functions/limitations),
