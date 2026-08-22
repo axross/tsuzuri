@@ -83,5 +83,6 @@ signed by GitHub.
 and can reference one that already exists.
 
 **Split media transfer** — the chunking this application applies to a **media
-object** in both directions, because the hosting platform caps a request body
-below the sizes GitHub itself would accept.
+object** it is uploading, because the hosting platform caps a request body
+below the sizes GitHub itself would accept. The download direction needs no
+chunking.
