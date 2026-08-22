@@ -37,7 +37,8 @@ Origin **A** is the author's site. Origin **B** is this application.
    `code_challenge_method`. Of `redirect_uri`, GitHub's own parameter
    description says: "This must be a match to one of the URLs you provided as
    a "Callback URL" in your app's settings and can't contain any additional
-   parameters." Both halves matter here. The first is why this leg cannot be
+   parameters." (read from GitHub's documentation on 2026-08-22). Both halves
+   matter here. The first is why this leg cannot be
    redirected to an attacker's origin. The second is why the reader's return
    URL cannot ride along on `redirect_uri` and has to be the server-side
    record step 2 keeps.
@@ -47,7 +48,8 @@ Origin **A** is the author's site. Origin **B** is this application.
 6. **B** compares the returned `state` against the one it stored. GitHub is
    explicit about what a mismatch means: "If the `state` parameter does not
    match the `state` parameter that you sent in the previous step, the request
-   cannot be trusted, and the web application flow should be aborted."
+   cannot be trusted, and the web application flow should be aborted." (read
+   from GitHub's documentation on 2026-08-22).
 7. **B** exchanges the code at `https://github.com/login/oauth/access_token`,
    posting `client_id`, `client_secret`, `code`, `redirect_uri`, and the PKCE
    `code_verifier`, and receives a user access token and a refresh token.
