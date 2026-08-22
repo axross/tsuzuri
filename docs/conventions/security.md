@@ -62,6 +62,13 @@ under `Lax` the reader's session would never reach the API at all. A reader's
 cookie MUST therefore be `SameSite=None`, which obliges the `Secure` attribute
 that every cookie here already carries.
 
+Two other arrangements would have avoided a cross-site cookie altogether — a
+top-level redirect to this application's own origin for the write, which keeps
+`SameSite=Lax`, and a short-lived bearer token handed to the consumer site —
+and both were rejected. Why, and what the third-party-cookie exposure accepted
+in their place costs, are in
+[the decision to carry the reader session in a cross-site cookie](../decisions/2026-08-22-carry-the-reader-session-in-a-cross-site-cookie.md).
+
 `SameSite=None` withdraws the protection `Lax` was providing against
 cross-site request forgery, so an endpoint that accepts a reader session MUST
 replace it with both of the following, and MUST NOT rely on either alone:
