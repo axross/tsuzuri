@@ -68,8 +68,8 @@ by default, and that durable, cross-instance, cross-deployment persistence
 requires a hand-written cache handler backed by "durable storage" the author
 supplies — Redis or S3 are the examples the guide itself gives
 ([How to self-host your Next.js application](https://nextjs.org/docs/app/guides/self-hosting),
-read 2026-08-22). This project is already committed to Vercel hosting (see
-[the decision to host on Vercel](./2026-08-21-host-on-vercel-and-split-media-transfer.md)),
+read 2026-08-22). This project is already committed to Vercel hosting, per
+`2026-08-21-host-on-vercel-and-split-media-transfer.md`,
 so Vercel's managed behavior is what we rely on — but it is a hosting-platform
 guarantee layered on top of the framework, not something Next.js promises on
 its own, and it could change if the hosting decision ever did.
@@ -257,9 +257,9 @@ this URL directly in your HTML"
 ([Public Storage](https://vercel.com/docs/vercel-blob/public-storage), read
 2026-08-22) — the browser would fetch media straight from a Vercel-owned
 hostname, never touching this application's own request path, which is the
-same shape of dependency the sibling decision to
-[serve media from our own cache rather than GitHub's raw
-host](./2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md)
+same shape of dependency the sibling decision to serve media from our own
+cache rather than GitHub's raw host,
+`2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md`,
 already rejected once, for a different vendor's raw host.
 
 **Rejected candidates:**
@@ -320,9 +320,8 @@ from on its one leg and private delivery does not on its second, Function-to-
 browser leg
 ([Vercel Blob Pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing),
 read 2026-08-22). This is a cost the project already chose to pay once: the
-decision to
-[serve media from our own cache rather than GitHub's raw
-host](./2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md)
+decision to serve media from our own cache rather than GitHub's raw host,
+`2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md`,
 accepted operating a cache layer and paying its egress in exchange for
 keeping every byte on this application's own origin; choosing private Blob
 mode over public is the same trade applied to this storage vendor.
@@ -354,8 +353,8 @@ is.
 
 **What is lost if the store is lost: a rebuild, not data loss.** The original,
 un-re-encoded media bytes remain committed in the linked repository under the
-existing decision to
-[store media there rather than in object storage](./2026-08-21-store-media-in-the-linked-repository-rather-than-in-object-storage.md).
+existing decision to store media there rather than in object storage,
+`2026-08-21-store-media-in-the-linked-repository-rather-than-in-object-storage.md`.
 Losing the Blob store means the next request for each image re-fetches the
 original from GitHub and re-runs the re-encode step — real CPU time and a
 burst of GitHub reads, bounded by the read-rate guidance in
