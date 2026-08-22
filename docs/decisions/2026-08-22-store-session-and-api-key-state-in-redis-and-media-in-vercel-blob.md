@@ -4,9 +4,9 @@ status: accepted
 
 # Store session and API-key state in Redis and media in Vercel Blob
 
-This application holds three kinds of state that do not fit the "everything
-outside the linked repository is derived" premise in `README.md` and
-`AGENTS.md`: the session record behind a login or a reader comment, the
+This application holds three kinds of state that do not fit the no-persistence
+premise `README.md` and `AGENTS.md` both state in their Project Overview
+sections: the session record behind a login or a reader comment, the
 per-blog API keys issue #32 needs to be revocable, and the re-encoded media
 cache that stands between readers and GitHub's raw host. None of the three had
 a home. We picked one for each from Vercel's and Next.js's own current
@@ -23,10 +23,9 @@ directly and we would rather cite a primary source than reproduce it with a
 disposable script.
 
 The post index is out of scope; issue #12 owns it. We deliberately did not
-cite `docs/decisions/2026-08-21-derive-the-post-index-instead-of-committing-it.md`,
-which #12 supersedes, or
-`docs/decisions/2026-08-21-limit-the-first-release-to-public-repositories.md`,
-which this milestone also supersedes.
+rely on the prior decision issue #12 supersedes on that topic, nor on the
+separate prior decision this milestone supersedes over repository
+visibility.
 
 ## Whether Next.js's caching primitives survive a deployment
 
@@ -119,13 +118,13 @@ does not exceed the underlying GitHub token's lifetime.
 - **An encrypted stateless cookie carrying the token.** This was the one
   candidate that would have added no vendor at all, and we rejected it
   anyway. `docs/conventions/security.md` § "Session Cookies Are This
-  Application's, Not GitHub's" already states that "The session record — not
-  the browser — holds the GitHub token; the cookie carries an opaque
-  identifier and nothing else." A cookie that carries the encrypted token
-  itself is exactly the design that rule forbids, and it also has no way to
-  force-expire a single compromised session without rotating every cookie's
-  encryption key at once — a strictly worse revocation story than the one
-  the API-key requirement already forced us to solve.
+  Application's, Not GitHub's" already requires the token to live in a
+  server-side session record rather than in the cookie itself. A cookie that
+  carries the encrypted token itself is exactly the design that rule
+  forbids, and it also has no way to force-expire a single compromised
+  session without rotating every cookie's encryption key at once — a
+  strictly worse revocation story than the one the API-key requirement
+  already forced us to solve.
 - **Vercel Global Config** (the product the plan's candidate list names
   "Edge Config"; Vercel renamed it and states "the store itself is
   unchanged" — [Vercel Global Config](https://vercel.com/docs/global-config),
@@ -187,8 +186,18 @@ was revoked before the loss.
 
 - **A stateless signed token with a separate revocation list.** As reasoned
   above, the revocation list is itself a store, so this candidate does not
-  avoid one — it just adds a second mechanism (the signature) on top of the
-  same requirement, for no benefit we could identify.
+  avoid one. The real argument for it is latency and resilience, not cost: a
+  signature verifies without a network round trip, so the revocation list
+  only needs consulting on some fraction of requests — cached for a short
+  window, or checked asynchronously — trading a bounded revocation delay for
+  fewer round trips per request and for surviving a brief store outage
+  without rejecting every key. That trade is a poor fit for what issue #32
+  requires here: per-key revocation with no tolerated window, which is
+  exactly the delay this pattern's whole benefit depends on introducing. A
+  design whose only advantage is checking the revocation list less often
+  cannot be adopted alongside a requirement that it be checked every time,
+  so it adds the signature scheme's own complexity on top of the same
+  storage requirement for no benefit this project can use.
 - **Vercel Global Config**, for the same reasons rejected for session state:
   a 1 MB total ceiling and up to ten seconds of write propagation. Ten
   seconds is a real window in which a key an operator just clicked "revoke"
@@ -223,15 +232,44 @@ not a cache warming back up.
 
 **Chosen.** The re-encoded media object — already required to land under
 1 MB before it is committed, per
-`docs/conventions/github-platform-limits.md` — is written to a Vercel Blob
-store in public-storage mode, addressed by the same content hash the linked
-repository already shards media by. Vercel's own storage comparison table
-names Blob for exactly this: "Large, content-addressable files ('blobs')"
+`docs/conventions/github-platform-limits.md` — is written to a **private**
+Vercel Blob store, addressed by the same content hash the linked repository
+already shards media by, and delivered to readers through a route handler
+this application owns rather than by the blob's own URL: "Since private
+blobs are delivered through your own Functions, you can serve them from any
+custom domain"
+([Private Storage](https://vercel.com/docs/vercel-blob/private-storage), read
+2026-08-22). Vercel's own storage comparison table names Blob for exactly
+this shape of data: "Large, content-addressable files ('blobs')"
 ([Vercel Storage overview](https://vercel.com/docs/storage), read
 2026-08-22).
 
+Public-storage mode was available and cheaper, and we rejected it on the
+project's own existing rule rather than on cost.
+`docs/conventions/github-platform-limits.md` § "Never Link
+`raw.githubusercontent.com`" already requires that media be delivered
+through this application's own cache layer, on this application's own
+origin — a MUST this record does not get to relax for a different vendor's
+storage product. A public Blob store fails that requirement by construction:
+"Every file uploaded to a public Blob store gets a URL in the form of
+`https://<store-id>.public.blob.vercel-storage.com/<pathname>`. You can use
+this URL directly in your HTML"
+([Public Storage](https://vercel.com/docs/vercel-blob/public-storage), read
+2026-08-22) — the browser would fetch media straight from a Vercel-owned
+hostname, never touching this application's own request path, which is the
+same shape of dependency the sibling decision to
+[serve media from our own cache rather than GitHub's raw
+host](./2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md)
+already rejected once, for a different vendor's raw host.
+
 **Rejected candidates:**
 
+- **Public-storage mode**, for the origin reason above: a public blob's URL
+  resolves on a Vercel-owned hostname the browser fetches directly, the same
+  problem shape `docs/conventions/github-platform-limits.md` already rules
+  out for GitHub's raw host. It is real money left on the table — see Cost
+  model below — but the origin rule is a MUST, not a preference weighed
+  against price.
 - **The Next.js Data Cache**, for the reasons already established above:
   Vercel's own guidance sends "Complete HTTP responses (images, fonts, etc.)"
   to the CDN cache instead, the 2 MB item cap leaves no margin over the 1 MB
@@ -254,8 +292,8 @@ names Blob for exactly this: "Large, content-addressable files ('blobs')"
   alternative would add a vendor for a capability Blob already provides
   under the existing Vercel relationship.
 
-**Cost model**, from Vercel Blob's own worked pricing example, read
-2026-08-22
+**Cost model**, from Vercel Blob's own worked pricing example and its
+delivery-cost comparison, read 2026-08-22
 ([Vercel Blob Pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing)):
 storage is **$0.023/GB** past a 5 GB included allowance; a cache-miss read
 ("Simple Operation") is **$0.40 per million** past 100K included; a write,
@@ -266,6 +304,47 @@ states pricing is regional, so another region's exact rate is not recorded
 here. `del()` calls are free. A blob larger than 512 MB is never cached and
 incurs an origin-transfer charge on every access — not a concern at our
 target of under 1 MB per object.
+
+Serving through a route handler is the more expensive of Blob's two delivery
+shapes, and this record says so rather than presenting private mode as free.
+The pricing page states the split directly: private delivery charges "Blob
+Data Transfer + Fast Origin Transfer on cache miss for the Function-to-store
+fetch, plus Fast Data Transfer + Fast Origin Transfer for the
+Function-to-browser response," while public delivery charges only "Blob Data
+Transfer + Fast Origin Transfer on cache miss," because the browser fetches
+the store directly — and "Blob Data Transfer (BDT) is 3x more cost-efficient
+than Fast Data Transfer (FDT) on average," a rate public delivery benefits
+from on its one leg and private delivery does not on its second, Function-to-
+browser leg
+([Vercel Blob Pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing),
+read 2026-08-22). This is a cost the project already chose to pay once: the
+decision to
+[serve media from our own cache rather than GitHub's raw
+host](./2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md)
+accepted operating a cache layer and paying its egress in exchange for
+keeping every byte on this application's own origin; choosing private Blob
+mode over public is the same trade applied to this storage vendor.
+
+What keeps that cost tolerable rather than prohibitive is the private page's
+own traffic guidance: "We do not recommend serving files larger than 100 MB
+through private Blob stores unless traffic is low"
+([Private Storage](https://vercel.com/docs/vercel-blob/private-storage), read
+2026-08-22). Our media is re-encoded to under 1 MB per object before it is
+ever written to the store — comfortably inside that guidance, not at its
+edge.
+
+The caching shape also differs from public mode. The CDN cache still sits
+between the route handler and the store the same way it does for public
+blobs — "When your Function fetches a private blob, the request goes through
+Vercel's CDN cache. If the blob is already cached, no Fast Origin Transfer is
+charged" — but the browser-facing cache is no longer the blob URL's own
+month-long default; it is whatever `Cache-Control` header the route handler
+sets on its own response
+([Private Storage](https://vercel.com/docs/vercel-blob/private-storage), read
+2026-08-22; contrast public mode, whose "[b]oth caches store blobs for up to
+1 month by default" —
+[Public Storage](https://vercel.com/docs/vercel-blob/public-storage), read
+2026-08-22).
 
 **Adds a vendor: no.** Vercel Blob bills through the same Vercel account
 already required for hosting; it is not a separate company the way Upstash
@@ -324,19 +403,17 @@ The following figures were not stated in the vendor documentation read on
 
 ## What this invalidates
 
-`README.md` states "There is no persistence layer of its own: everything
-outside the linked repository is derived, and can be rebuilt from it," and
-`AGENTS.md` mirrors it: "It adds no persistence layer of its own. The linked
-repository is the only source of truth, and everything else is a cache that
-can be rebuilt from it." Both statements are false the moment this decision's
-stores exist. Media is a rebuild, as shown above, so it does not break the
-claim on its own — but the API-key verifier's scopes are genuine data loss if
-its store is lost, not something the linked repository can rebuild, and
-session state sits outside the linked repository's authority entirely. Both
-documents need a carve-out naming session and API-key state as the exception
-to "everything is derived." Writing that carve-out is out of scope for this
-record, per its plan's non-goals; it is left to whichever change implements
-this decision.
+`README.md`'s Project Overview, and `AGENTS.md`'s mirror of it, both claim
+this application keeps no persistence layer of its own — that everything
+outside the linked repository is a derived cache rebuildable from it. Both
+claims become false the moment this decision's stores exist. Media is a
+rebuild, as shown above, so it does not break the claim on its own — but the
+API-key verifier's scopes are genuine data loss if its store is lost, not
+something the linked repository can rebuild, and session state sits outside
+the linked repository's authority entirely. Both documents need a carve-out
+naming session and API-key state as the exception to that no-persistence
+claim. Writing that carve-out is out of scope for this record, per its
+plan's non-goals; it is left to whichever change implements this decision.
 
 `docs/conventions/security.md` § "Session Cookies Are This Application's, Not
 GitHub's" is not invalidated — see Session state above — so no rewrite is
