@@ -37,9 +37,12 @@ HTML and static-asset legs never come from this application at all; a
 consumer's own site renders them. The corrected model is three media
 requests at roughly 150 KB each plus one API request at roughly 30 KB per
 page view. At two million page views a month that is 8,000,000 requests and
-480 KB of body per page view, or 960 GB; Vercel bills the full request and
-response including headers, so roughly 5% of protocol overhead brings the
-billable figure to about 1,008 GB. The author side is unchanged by the
+480 KB of body per page view, or 960 GB. Vercel measures Fast Data
+Transfer on "the full size of each HTTP request and response," headers and
+URL included
+([Manage CDN usage](https://vercel.com/docs/manage-cdn-usage), read
+2026-08-22), so roughly 5% of protocol overhead brings the billable figure
+to about 1,008 GB. The author side is unchanged by the
 correction: 1,000 monthly active authors, roughly 4,000 save commits, and
 roughly 12,000 image uploads.
 
@@ -169,10 +172,13 @@ public output from `hono/jsx` while building the authoring interface in
 React would mean maintaining two build environments in one project.
 Cloudflare's own Hono framework guide points toward a Hono API Worker paired
 with a separate React SPA — the vendor's own recommended shape is the split
-this project would have had to adopt. File-system routing exists only in
-HonoX, whose README states it "is currently in the 'alpha stage'" with
-breaking changes introduced within the same major version, at version
-0.1.61 as read. The honest counterweight belongs here too: issue #11 will
+this project would have had to adopt
+([Hono framework guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/),
+read 2026-08-22). File-system routing exists only in HonoX, whose README
+states it "is currently in the 'alpha stage'" with breaking changes
+introduced within the same major version
+([honox README](https://unpkg.com/honox@0.1.61/README.md), read
+2026-08-22), at version 0.1.61 as read. The honest counterweight belongs here too: issue #11 will
 record that this application is a headless CMS, and under that model
 React Server Components, `generateMetadata`, and the SEO surface stop
 mattering — which weakens the case for keeping Next.js at all. We took the
@@ -225,15 +231,20 @@ used with: Preview URLs (staging deployments)"
 ([Multi-worker](https://opennext.js.org/cloudflare/howtos/multi-worker),
 read 2026-08-22). Preview URLs also carry no
 logs at all: "You cannot view logs for Preview URLs today, this includes
-Workers Logs, Wrangler tail and Logpush." Issue #70 is where the
+Workers Logs, Wrangler tail and Logpush" (same page, read 2026-08-22).
+Issue #70 is where the
 per-pull-request preview pipeline gets rebuilt around this constraint.
 
 **Medium.** The 128 MB per-isolate memory ceiling is per isolate, not per
 invocation — "A single isolate can handle many concurrent requests" against
-that same 128 MB — so a 100 MB request body cannot simply be buffered in
+that same 128 MB
+([Workers limits](https://developers.cloudflare.com/workers/platform/limits/),
+read 2026-08-22) — so a 100 MB request body cannot simply be buffered in
 memory; media handling has to stream, and the practical ceiling for a
 single in-memory operation sits closer to the Cloudflare Images binding's
-20 MB input limit than to the 100 MB request-body cap.
+20 MB input limit
+([Images limits](https://developers.cloudflare.com/images/get-started/limits/),
+read 2026-08-22) than to the 100 MB request-body cap.
 
 **High.** Server-side image re-encoding has to be decided again from
 nothing, and the decision it unmakes was accepted the same day as this one.
@@ -257,11 +268,15 @@ to 505 MB for `sharp`'s WebP runs, 779 MB at worst including AVIF, and
 Those are comfortable against a Vercel Function's 2 GB default. **A Worker
 isolate gets 128 MB in total**, so the lowest peak that record measured for
 any encoder on any input is already close to twice the entire Cloudflare
-ceiling, and the ceiling is per isolate rather than per invocation. No
-candidate it measured fits. `sharp`'s 46.74 MB uncompressed bundle would
-also sit against Workers' 10 MB gzipped script limit rather than Vercel's
-250 MB uncompressed one. Cloudflare's own Images binding is the obvious
-remaining path and takes input up to 20 MB, but choosing it is issue #40's
+ceiling, and the ceiling is per isolate rather than per invocation
+([Workers limits](https://developers.cloudflare.com/workers/platform/limits/),
+read 2026-08-22). No candidate it measured fits. `sharp`'s 46.74 MB
+uncompressed bundle would also sit against Workers' 10 MB gzipped script
+limit, from that same page, rather than against the 250 MB uncompressed one
+the encoder record cites for Vercel. Cloudflare's own Images binding is the
+obvious remaining path and takes input up to 20 MB
+([Images limits](https://developers.cloudflare.com/images/get-started/limits/),
+read 2026-08-22), but choosing it is issue #40's
 decision, made under issue #67's vendor constraint, not this record's.
 
 **Medium.** `next/image` needs an explicit Cloudflare Images binding or a
@@ -286,9 +301,10 @@ Cloudflare zone and two additional secrets on top of that.
 scope, which does not hold on Workers, where configuration arrives per
 request rather than once at boot.
 
-**Low.** Workers Free's 10 ms CPU-time ceiling per request is inadequate
-for server-side rendering, so Workers Paid is a floor for this project
-rather than an optional upgrade.
+**Low.** Workers Free's 10 ms CPU-time ceiling per request
+([Workers limits](https://developers.cloudflare.com/workers/platform/limits/),
+read 2026-08-22) is inadequate for server-side rendering, so Workers Paid is
+a floor for this project rather than an optional upgrade.
 
 ## What this migration will invalidate
 
@@ -300,7 +316,8 @@ without editing any of it:
   wholly. It was accepted on the same day as this record, and it opens by
   stating that the re-encoding "has to run on a Vercel Function." Its chosen
   encoder cannot run on Workers, and none of the four candidates it measured
-  fits a 128 MB isolate. Superseding it needs a fresh measurement against
+  fits a Worker isolate — the obstacles section above carries the figures and
+  their sources. Superseding it needs a fresh measurement against
   Cloudflare's own primitives rather than a rewrite of its reasoning, which
   is why this record does not supersede it here — see "What is left open."
 - `docs/conventions/github-platform-limits.md`
