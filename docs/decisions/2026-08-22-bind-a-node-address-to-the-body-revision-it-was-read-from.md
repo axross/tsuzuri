@@ -18,16 +18,30 @@ agent would then apply its write to content it never saw.
 
 ## The chosen scheme
 
+We chose to bind the address to the revision it was read from, and to refuse
+it outright whenever that revision has moved.
+
 A node is a root-level child of the body's Markdown syntax tree, minus the
 front-matter node — a heading, a paragraph, a list, a table, and so on. A node
 address is four values: the node's index among its siblings, its type, a
-sha256 digest of its own source bytes, and a sha256 digest of the whole body
-it was read from. An address is honoured only when the current body's digest
-matches the one it carries; if it does not, the address is refused outright,
-without attempting to locate the node by any other means. Once the digest
-matches, the index is exact by construction — the body has not changed since
-it was read — and the node digest and type are checked as an internal
-consistency cross-check, not as the thing providing safety.
+sha256 digest of its own source bytes, and a sha256 digest of the post file it
+was read from.
+
+That last value is called the **document digest** throughout what follows, and
+it covers the post file's stored bytes in full — front matter included, even
+though no node ever addresses front matter. Covering only the body below the
+front matter would be the more obvious reading and is the wrong one: a node's
+offsets are absolute positions in the file, so editing front matter to a
+different length shifts every one of them. Including front matter in the
+digest is what makes a metadata edit invalidate outstanding node addresses,
+which is the correct outcome and would not happen otherwise.
+
+An address is honoured only when the current document digest matches the one
+it carries; if it does not, the address is refused outright, without
+attempting to locate the node by any other means. Once the digest matches, the
+index is exact by construction — the file has not changed since it was read —
+and the node digest and type are checked as an internal consistency
+cross-check, not as the thing providing safety.
 
 An edit is applied as a structural operation, not a rewrite of the tree:
 replace, insert-before, or delete, each expressed by splicing the node's
@@ -49,7 +63,7 @@ other than the one the agent read:
 | Ordinal node index | 6 / 17 |
 | Content digest alone | 2 / 17 |
 | Source offset range | 1 / 17 |
-| Chosen scheme (refusing on any body-digest mismatch) | 0 / 17 |
+| Chosen scheme (refusing on any document-digest mismatch) | 0 / 17 |
 
 **Heading path** — a node named by the path of headings above it, plus its
 offset within that section — misfired on an insertion before it and on an
@@ -113,7 +127,7 @@ recover a node identity from content that duplication can always confuse.
 | Scenario | What happens to the addressed node | Resolution |
 | --- | --- | --- |
 | No edit; the write arrives against the same revision | Index, offsets, and node digest are exactly as read | Resolves — the address is exact by construction |
-| An edit before the addressed node (e.g. a paragraph inserted earlier in the body) | The node's own content is untouched, but its index and byte offsets shift | Refused — the body digest no longer matches |
+| An edit before the addressed node (e.g. a paragraph inserted earlier in the body) | The node's own content is untouched, but its index and byte offsets shift | Refused — the document digest no longer matches |
 | An edit inside the addressed node | The node's source bytes, and its own digest, change | Refused |
 | An edit that deletes the addressed node | The node no longer exists at that index | Refused |
 | An edit that appends a byte-identical copy of the node elsewhere in the body | A second node now shares the original's node digest | Refused — resolution never searches by digest to find a node, only cross-checks one already located by index |
@@ -255,23 +269,23 @@ only confirmation that the write landed — without that, an agent has to
 re-read the whole structure after every single write, defeating the purpose
 of returning it inline in the first place.
 
-## Why the per-node digest belongs in the single read, not the listing
+## The per-node digest is not part of the address
 
-A synthetic 80-node, 24,940-byte post was used to size a structure listing —
-the response an agent gets back when it asks what nodes a body contains,
-before addressing any one of them. Carrying a sha256 hex digest for every
-node in that listing put it at 8,645 bytes, 34.7% of the body it describes;
-dropping the per-node digest and keeping only each node's index, type, and
-byte count brought it to 3,165 bytes, 12.7%. On the small fixtures the
-difference is starker still: a digest-carrying listing for a 387-byte body
-ran to 1,540 bytes — larger than the body itself.
+One consequence of binding the address to the document digest is worth stating
+because it is easy to get backwards: the per-node digest is a cross-check, not
+a locator, so nothing needs it in order to address a node. The document digest
+together with the index is already the whole address. The node digest earns
+its place in the response to reading one specific node, where it confirms that
+the node the caller thinks it read is the one the index names; it has no work
+to do anywhere a node is merely being listed.
 
-The digest is not needed at that stage. Because an address is honoured only
-against an exact document-digest match, the document digest plus the index
-is already the whole address; a listing's job is only to let an agent choose
-which index to address next. The per-node digest belongs in the response to
-reading one specific node, where it serves as the consistency cross-check
-described above, not in the listing of all of them.
+That matters because a digest is not cheap to carry. A sha256 rendered as hex
+is sixty-four characters per node, which against a measurement post of eighty
+nodes and 24,940 bytes — forty sections of prose, each a heading and a
+paragraph — came to 8,645 bytes for a listing carrying one digest per node,
+against 3,165 bytes for the same listing carrying each node's index, type and
+byte count alone. Whether a listing is worth returning at all, and what else
+it should carry, is a read-path question this record deliberately leaves open.
 
 ## MCP-only, not the public API
 
