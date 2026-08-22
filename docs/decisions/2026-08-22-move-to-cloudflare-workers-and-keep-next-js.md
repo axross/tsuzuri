@@ -197,25 +197,34 @@ memory; media handling has to stream, and the practical ceiling for a
 single in-memory operation sits closer to the Cloudflare Images binding's
 20 MB input limit than to the 100 MB request-body cap.
 
-**Medium.** `sharp`, this project's current image re-encoder, cannot run
-on Workers. It requires a "Node-API v9 compatible runtime," and its WASM
-variant states that "Use in single-threaded environments is unsupported"
-while requiring "multi-threaded Wasm via Workers"
-([sharp installation](https://sharp.pixelplumbing.com/install/), read
-2026-08-22) — directly incompatible with Cloudflare's own statement that
-"Threading is not possible in Workers. Each Worker runs in a single
+**High.** Server-side image re-encoding has to be decided again from
+nothing, and the decision it unmakes was accepted the same day as this one.
+`2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`
+chose `sharp` 0.35.3 to WebP at a 2000px long edge, and states in its
+opening that the re-encoding "has to run on a Vercel Function." `sharp`
+cannot run on Workers at all: it requires a "Node-API v9 compatible
+runtime," and its WASM variant states that "Use in single-threaded
+environments is unsupported" while requiring "multi-threaded Wasm via
+Workers" ([sharp installation](https://sharp.pixelplumbing.com/install/),
+read 2026-08-22) — directly incompatible with Cloudflare's own statement
+that "Threading is not possible in Workers. Each Worker runs in a single
 thread, and the Web Worker API is not supported"
 ([WebAssembly runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/webassembly/),
-read 2026-08-22). We benchmarked two WASM candidates on Node.js, not on
-Workers, decoding a 4000×3000 JPEG: the `@jsquash` chain peaked around
-630 MB of WASM linear memory and `@cf-wasm/photon` around 244 MB, both over
-the 128 MB isolate ceiling; `@cf-wasm/photon` additionally exposes no
-WebP quality argument and emits lossless output, 3.2 MB at 2000×1500,
-which cannot meet this project's under-1 MB target regardless of memory.
-Peak WASM memory is dominated by the decoder's own allocation and should
-carry across runtimes, but this was not measured on Workers itself.
-Choosing the replacement re-encoding path is issue #40's decision, made
-under issue #67's vendor constraint, not this record's.
+read 2026-08-22).
+
+The memory figures are what make this the hardest obstacle rather than a
+swap. That record measured peak resident set on a deployed preview: 227 MB
+to 505 MB for `sharp`'s WebP runs, 779 MB at worst including AVIF, and
+666 MB to 869 MB for `@cf-wasm/photon`, the highest any candidate reached.
+Those are comfortable against a Vercel Function's 2 GB default. **A Worker
+isolate gets 128 MB in total**, so the lowest peak that record measured for
+any encoder on any input is already close to twice the entire Cloudflare
+ceiling, and the ceiling is per isolate rather than per invocation. No
+candidate it measured fits. `sharp`'s 46.74 MB uncompressed bundle would
+also sit against Workers' 10 MB gzipped script limit rather than Vercel's
+250 MB uncompressed one. Cloudflare's own Images binding is the obvious
+remaining path and takes input up to 20 MB, but choosing it is issue #40's
+decision, made under issue #67's vendor constraint, not this record's.
 
 **Medium.** `next/image` needs an explicit Cloudflare Images binding or a
 custom loader to do anything on Workers, and its `minimumCacheTTL` option
@@ -249,6 +258,13 @@ None of the following is false yet — Vercel remains the platform until the
 migration is executed — so this record names what it will invalidate
 without editing any of it:
 
+- `2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`,
+  wholly. It was accepted on the same day as this record, and it opens by
+  stating that the re-encoding "has to run on a Vercel Function." Its chosen
+  encoder cannot run on Workers, and none of the four candidates it measured
+  fits a 128 MB isolate. Superseding it needs a fresh measurement against
+  Cloudflare's own primitives rather than a rewrite of its reasoning, which
+  is why this record does not supersede it here — see "What is left open."
 - `docs/conventions/github-platform-limits.md`
   § "Stay Inside the Hosting Platform's Body Limit," which states Vercel's
   4.5 MB request-body cap and the chunking it requires.
@@ -271,9 +287,14 @@ This record does not decide, and deliberately leaves to other work:
   `2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`;
   a `superseded_by` field names exactly one replacement, and #67 is already
   assigned that one.
-- **The image re-encoding method.** Issue #40 owns this, under issue #67's
-  constraint. This record supplies the evidence that rules `sharp` out; it
-  does not choose what replaces it.
+- **The image re-encoding method, again.** It was decided on 2026-08-22 by
+  `2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`
+  and this decision unmakes that one, so the question reopens rather than
+  merely staying open. Issue #40 owns it, under issue #67's constraint. This
+  record supplies the evidence that rules `sharp` out on Workers; it does not
+  choose what replaces it, and a replacement wants measurement on Cloudflare
+  of the kind that record made on Vercel rather than a decision from
+  documentation.
 - **When the migration executes.** Issues #68 (Sentry source maps through
   the OpenNext bundle), #69 (whether Pino works on Workers), and #70 (a
   per-pull-request preview built around one Worker per pull request) are
@@ -287,10 +308,14 @@ This record does not decide, and deliberately leaves to other work:
 ## What was not verified
 
 No deployment was made to Cloudflare, and no figure above was measured
-against a running system — every platform figure is drawn from vendor
-documentation, cited with the date it was read, and every WASM memory
-measurement in the obstacles section was taken on Node.js rather than on
-Workers. Cloudflare's own documentation says nothing, in either direction,
+against a running system: every platform figure is drawn from vendor
+documentation, cited with the date it was read. The encoder memory figures
+the obstacles section leans on are the one exception, and they cut the other
+way — they were measured, but on a Vercel preview deployment rather than on
+Workers, so they establish what those encoders cost rather than what they
+would cost on the platform this record moves to. That is enough to rule them
+out against a 128 MB ceiling and not enough to size a replacement.
+Cloudflare's own documentation says nothing, in either direction,
 about support for native Node addons; a workerd maintainer wrote in a
 GitHub discussion on 2024-06-14 that "Node.js native add-ons are likely
 never to be supported by workers," and an N-API support request has been
