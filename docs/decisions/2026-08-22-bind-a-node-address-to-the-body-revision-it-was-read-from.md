@@ -143,9 +143,12 @@ names; the only two outcomes it produces are "the node exactly as read" and
 front matter, an opening paragraph before any heading, two sections — `##
 Setup` and `## Rollout` — each carrying a `### Notes` subheading with the same
 title, a list, and a fenced code block whose contents look like Markdown but
-are not parsed as such because they sit inside a code fence. Its body is 387
-bytes, and its whole-body sha256 digest is
-`3d2dd3c0bc35c3f30c444a2979d50fc78c81a99c1faaedac5b13e3d9a340c0c8`.
+are not parsed as such because they sit inside a code fence. The file is 387
+bytes — the front matter counted in, as the definition above requires — and
+its document digest, taken over all 387 of them, is
+`3d2dd3c0bc35c3f30c444a2979d50fc78c81a99c1faaedac5b13e3d9a340c0c8`. The
+offsets below are likewise positions in the whole file, which is why node 6
+begins at 187 rather than at 187 minus the front matter's length.
 
 Reading node index 6 — the paragraph "Roll it out slowly." under `## Rollout`
 — returns:
@@ -162,13 +165,17 @@ Reading node index 6 — the paragraph "Roll it out slowly." under `## Rollout`
 }
 ```
 
-A write replacing that paragraph presents the same index and both digests
-back, alongside the new content and the operation to perform:
+The first four fields are the address itself; `start`, `end` and `markdown`
+are what the caller asked for, and a write does not send them back.
+
+A write replacing that paragraph presents all four address values back,
+alongside the operation to perform and the new content:
 
 ```json
 {
   "documentDigest": "3d2dd3c0bc35c3f30c444a2979d50fc78c81a99c1faaedac5b13e3d9a340c0c8",
   "index": 6,
+  "type": "paragraph",
   "nodeDigest": "8537af656ab8b095602c3124f6da0e3ff05c202437f9c74bea67d7b63c02a400",
   "operation": "replace",
   "markdown": "Roll it out over three days, staged by region."
@@ -269,15 +276,22 @@ only confirmation that the write landed — without that, an agent has to
 re-read the whole structure after every single write, defeating the purpose
 of returning it inline in the first place.
 
-## The per-node digest is not part of the address
+## Why a listing of nodes carries no per-node digest
 
-One consequence of binding the address to the document digest is worth stating
-because it is easy to get backwards: the per-node digest is a cross-check, not
-a locator, so nothing needs it in order to address a node. The document digest
-together with the index is already the whole address. The node digest earns
-its place in the response to reading one specific node, where it confirms that
-the node the caller thinks it read is the one the index names; it has no work
-to do anywhere a node is merely being listed.
+The address is four values, and every one of them travels with it; what
+differs is the work each does. The document digest binds the address to a
+revision and the index locates the node within it, so those two are what
+resolution acts on. The type and the node digest are checked once resolution
+has already landed, and only to confirm that the node the caller believes it
+read is the one the index names.
+
+That division has a consequence for a listing — the response an agent gets
+when it asks what nodes a body contains, before addressing any one of them. A
+listing is not a set of addresses; it is a menu of indices to build one from,
+and the document digest it is issued against covers the whole listing at once.
+So a per-node digest has nothing to do there. It earns its place in the
+response to reading one specific node, where the cross-check it feeds is
+actually performed.
 
 That matters because a digest is not cheap to carry. A sha256 rendered as hex
 is sixty-four characters per node, which against a measurement post of eighty
