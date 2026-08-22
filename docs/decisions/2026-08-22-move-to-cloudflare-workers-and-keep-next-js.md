@@ -36,16 +36,34 @@ this application is a headless CMS serving no reader-facing pages, so the
 HTML and static-asset legs never come from this application at all; a
 consumer's own site renders them. The corrected model is three media
 requests at roughly 150 KB each plus one API request at roughly 30 KB per
-page view. At two million page views a month that is about 8,000,000
-requests and about 1,008 GB of egress, plus an author side unchanged by the
+page view. At two million page views a month that is 8,000,000 requests and
+480 KB of body per page view, or 960 GB; Vercel bills the full request and
+response including headers, so roughly 5% of protocol overhead brings the
+billable figure to about 1,008 GB. The author side is unchanged by the
 correction: 1,000 monthly active authors, roughly 4,000 save commits, and
 roughly 12,000 image uploads.
 
-Under that model, Vercel's base-scale total of about $30 is mostly its $20
-Pro platform fee, since the corrected request count and egress both land
-inside the plan's included allowances
+Vercel's base-scale total of about $30 is roughly two thirds fixed cost and
+one third traffic, and it is worth itemizing rather than rounding, because
+one of its components has no included allowance at all. The $20 Pro platform
+fee is most of it. Fast Data Transfer and Edge Requests contribute nothing:
+1,008 GB sits inside the plan's included 1 TB and 8,000,000 requests inside
+its included 10,000,000
 ([Vercel Pro plan](https://vercel.com/docs/plans/pro-plan), read
-2026-08-22). Cloudflare's base-scale total of about $9 is the $5 Workers
+2026-08-22). **Fast Origin Transfer is the component that does not behave
+that way.** It bills the bytes between the CDN and a Function, Blob, or the
+Data Cache at $0.06 per GB from the first byte, with no Pro-plan allowance
+([iad1 regional pricing](https://vercel.com/docs/pricing/regional-pricing/iad1),
+read 2026-08-22), and it applies here because the storage decision this
+record does not supersede puts the media cache behind the CDN in Vercel
+Blob. On an assumed 90% CDN hit rate for media and 80% for the API — media
+is content-addressed and therefore safely immutable, which is what makes the
+higher figure defensible — the origin sees about 102 GB, or roughly $6 a
+month. The remaining few dollars are Function invocations, Active CPU,
+Provisioned Memory, and Blob operations. **Those hit-rate assumptions are
+the softest input to this whole comparison**, and they move only the Vercel
+side: Cloudflare bills no egress at any hit rate. Cloudflare's base-scale
+total of about $9 is the $5 Workers
 Paid minimum plus roughly $3.50 for 12,000 Cloudflare Images
 transformations plus roughly $0.60 of R2 storage
 ([Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/),
@@ -167,23 +185,32 @@ ground has already shifted under it.
 These are real costs of the choice, not reasons to reverse it, and this
 section is meant to double as the migration's own risk list.
 
-**High.** `src/proxy.ts` makes the OpenNext build fail outright. Next.js
-documents that "Proxy defaults to using the Node.js runtime. The `runtime`
-config option is not available in Proxy files. Setting the `runtime`
-config option in Proxy will throw an error."
-([Proxy file convention](https://nextjs.org/docs/app/api-reference/file-conventions/proxy),
-read 2026-08-22). We confirmed this three ways rather than trusting the
-documentation alone: the installed `next@16.3.1`'s build treats any
-`proxy.ts` file as Node middleware regardless of its content; running
-`npm run build` against this tree produced a
-`functions-config-manifest.json` naming `/_middleware` with
-`"runtime": "nodejs"`; and `@opennextjs/cloudflare@1.20.2`'s build script
-detects that manifest entry, logs "Node.js middleware is not currently
-supported. Consider switching to Edge Middleware," and exits non-zero. The
-cheapest resolution is deleting `src/proxy.ts` — its body is
-`createMiddleware(routing)` from next-intl, and `src/i18n/routing.ts`
-currently declares a single locale, so it performs no negotiation today —
-but choosing that resolution is migration work, not this record's.
+**High, and this record was written without it.** Three build-toolchain
+constraints govern any host adapter for this project, and
+`docs/conventions/build-toolchain.md` states all three and closes by
+saying they are "the first three questions to settle, ahead of pricing or
+ergonomics." That document landed on `main` while this branch was open. The
+honest reading is that this decision costed a platform before answering
+them, which is the sequence that convention exists to prevent — we take the
+decision anyway, and record that the ordering was wrong rather than
+presenting it as deliberate.
+
+What the three cost this migration, with the constraints themselves left to
+the convention that owns them: `src/proxy.ts` makes the OpenNext build exit
+non-zero, and the remedy is not a flag but a decision about what that file
+is for — the convention names both ways out and states that either belongs
+to a change deciding it deliberately. That the adapter will not simply grow
+support for it is worth adding here, because it bears on whether waiting is
+an option: OpenNext's maintainers closed the implementing pull request
+unmerged. The standalone output omits this project's `instrumentation.ts`,
+and the obvious remedy converts a failing build into a passing build and a
+dead deployment, which makes it the constraint most likely to be discovered
+late. And `@scope` forecloses the webpack path entirely, so an adapter that
+shells out to `next build --webpack` is not adoptable at any price.
+
+None of the three is a reason to reverse this decision, and none was known
+to be resolved when it was taken. They are the work the migration begins
+with.
 
 **High.** Durable Objects and Preview URLs are mutually exclusive.
 Cloudflare's documentation states plainly: "Preview URLs are not generated
