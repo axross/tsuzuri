@@ -12,13 +12,18 @@ JSON line per record through the platform console**:
 strength of what #69 measured against a deployed Worker, not on an assumption
 about which platform this project ends up hosted on.
 
-**Why now, without deciding the platform.** #67, #68, #69 and #70 are open
-spikes and the hosting question stays undecided; nothing here presupposes
-Cloudflare. `console[level](JSON.stringify(record))` is not a Workers-specific
-construction — it yields JSON on Node's own console and on `workerd` alike, so
-the constraint can be adopted while the platform question is still open, and
-whichever platform is eventually chosen inherits a logger that already
-satisfies it rather than one that has to be redone.
+**Why now, and why platform-neutral.** This project is hosted on Vercel, and
+that is a decided question rather than an open one:
+`2026-08-21-host-on-vercel-and-split-media-transfer.md` is accepted and no
+record supersedes it. What is open is narrower — #67, #68, #69 and #70 are
+spikes measuring what a move to Cloudflare Workers would cost, and #69 is the
+one that produced the measurements below. This decision presupposes neither
+outcome. `console[level](JSON.stringify(record))` is not a Workers-specific
+construction; it yields JSON on Node's own console and on `workerd` alike, so
+the logger it describes is correct on the host this project runs on today and
+survives unchanged if that host is ever revisited. Adopting it now costs
+nothing against the standing hosting decision and removes a dependency that
+would have to be unwound if the spikes lead anywhere.
 
 **What #69 measured, on a deployed paid-plan Worker.** Two independent
 failures, not one. Under Wrangler's default resolution, pino 10.3.1 resolves
@@ -52,13 +57,14 @@ two loggers you get is implicit and one environment variable from silent
 breakage: OpenNext's own troubleshooting page *recommends* setting
 `WRANGLER_BUILD_CONDITIONS=""` and `WRANGLER_BUILD_PLATFORM="node"` to fix
 unrelated packages that mis-resolve
-(<https://opennext.js.org/cloudflare/troubleshooting>, read 2026-08-22).
+([OpenNext Cloudflare troubleshooting](https://opennext.js.org/cloudflare/troubleshooting),
+read 2026-08-22).
 Anyone who flips those for some other dependency's sake converts every log
 line in this project into an unindexed, level-less, `stdout: `-prefixed
 string — with no error, no warning, and passing tests. `process.stdout` on
 Workers is documented as a "non-TTY writable stream, which output[s] to
 normal logging output only with `stdout: ` and `stderr: ` prefixing"
-(<https://developers.cloudflare.com/workers/runtime-apis/nodejs/process/>,
+([Node.js compatibility: process](https://developers.cloudflare.com/workers/runtime-apis/nodejs/process/),
 read 2026-08-22), and a prefixed line is not JSON — exactly the tension #69
 set out to measure, and exactly what the forced build reproduced.
 
@@ -138,7 +144,7 @@ inference for measurement:
 - **Vercel Runtime Logs' own retention and size limits.** #69 measured
   Workers Logs' figures directly — 3-day retention on the Free plan, 7-day on
   Paid, and a 256 KB per-log cap before truncation
-  (<https://developers.cloudflare.com/workers/observability/logs/workers-logs/>,
+  ([Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/),
   read 2026-08-22) — but the current arrangement's own retention and size
   limits were out of scope for that spike and were never measured.
 
