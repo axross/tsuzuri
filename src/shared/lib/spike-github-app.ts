@@ -4,7 +4,7 @@ import { createSign, timingSafeEqual } from "node:crypto";
  * Throwaway measurement scaffolding for issue #6. This file is deleted
  * before the pull request leaves draft — see the decision record it feeds.
  *
- * It reads `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `SPIKE_SCRATCH_REPO`,
+ * It reads `COMPANION_GITHUB_APP_ID`, `COMPANION_GITHUB_APP_PRIVATE_KEY`, `SPIKE_SCRATCH_REPO`,
  * and `SPIKE_SHARED_SECRET` straight from `process.env` rather than through
  * `src/shared/lib/env.ts`. That wiring is issue #16's own work; pulling it
  * forward here is a non-goal this file deliberately does not take on.
@@ -103,11 +103,11 @@ export interface MintedToken {
  * than reused across a lengthy sequence.
  */
 export async function mintInstallationToken(): Promise<MintedToken> {
-	const appId = process.env.GITHUB_APP_ID;
-	const rawPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY;
+	const appId = process.env.COMPANION_GITHUB_APP_ID;
+	const rawPrivateKey = process.env.COMPANION_GITHUB_APP_PRIVATE_KEY;
 	if (!appId || !rawPrivateKey) {
 		throw new Error(
-			"GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY is not configured",
+			"COMPANION_GITHUB_APP_ID or COMPANION_GITHUB_APP_PRIVATE_KEY is not configured",
 		);
 	}
 	const privateKey = normalizePrivateKey(rawPrivateKey);
