@@ -71,21 +71,23 @@ read 2026-08-22, both quotes). For GraphQL specifically that budget is
 GraphQL API](https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits-for-the-graphql-api),
 read 2026-08-22) — the same shared-quota shape
 `2026-08-21-use-a-github-app-rather-than-an-oauth-app.md` rejected for the
-OAuth App, now returned for the write path alone. Reads are unaffected: they
-stay on the installation token, which starts at 5,000 requests per hour and
-caps at 12,500 (Rate limits for the REST API, read 2026-08-22), and that
-installation-scoped growth is what the earlier decision's argument was
-actually about, because reads scale with traffic while writes scale with
-edits. Writes are further bounded by limits this project already accepts —
-autosave produces no commits, an explicit save is debounced to at least ten
-seconds apart, and GitHub's recommended push rate is six per minute per
-repository — so at most a few hundred saves an hour per author sit well
-inside a 5,000-point budget the author is unlikely to be contending for
-otherwise. This finding qualifies
-`2026-08-21-use-a-github-app-rather-than-an-oauth-app.md`'s rate-limit
-argument without overturning it: per-installation billing still holds for
-reads and for growth, and it is only the write path that now shares the
-author's own quota.
+OAuth App, now returned for the write path. That record rejected the OAuth
+App "on the rate limit alone", and it drew no reads-versus-writes distinction
+when it did, so this decision reintroduces for saves exactly the sharing it
+rejected. We accept that rather than avoid it, and the ground is the size of
+what is shared rather than a narrower reading of what was rejected. Writes
+are bounded by limits this project already accepts — autosave produces no
+commits, an explicit save is debounced to at least ten seconds apart, and
+GitHub's recommended push rate is six per minute per repository — so a few
+hundred saves an hour per author is the ceiling, well inside a 5,000-point
+budget the author is unlikely to be contending for otherwise. Reads are
+untouched and stay on the installation token, which starts at 5,000 requests
+per hour and caps at 12,500 (Rate limits for the REST API, read 2026-08-22),
+so the per-installation quota that makes a second customer bring their own
+capacity still holds for everything that scales with traffic. What the
+earlier decision gives up here is narrower than its own wording, but it does
+give up something, and a later reader should not have to reconstruct that
+from two records that each read as settled.
 
 **The rejected fallback.** Had user authorship not been reachable, the
 fallback was an app-authored commit carrying a `Co-authored-by:` trailer.
@@ -117,9 +119,8 @@ profile?](https://docs.github.com/en/account-and-profile/setting-up-and-managing
 read 2026-08-22, both facts) — but no documentation states which address the
 mutation itself picks, so neither claim can be marked verified from a primary
 source. Settling either needs an observed response from a registered app and
-a minted user token, which this investigation did not run;
-[issue #59](https://github.com/axross/tsuzuri/issues/59) carries the two claims
-and the steps that would settle them.
+a minted user token, which this investigation did not run; issue #59
+carries the two claims and the steps that would settle them.
 
 The consequence lands in this same change: the webhook exclusion this project
 relies on identified our own writes by the application's bot identity, and a
