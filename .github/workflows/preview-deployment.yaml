@@ -1,22 +1,24 @@
 name: Preview Deployment
 
-# Per-pull-request preview environments, deployed through Vercel. The procedure,
-# the one-time operator setup, and how to read a preview that looks stale are in
+# Per-pull-request preview environments, deployed as one named Cloudflare
+# Worker per pull request. The procedure, the one-time operator setup, and
+# how to read a preview that looks stale are in
 # docs/operations/preview-deployment.md.
 #
-# This workflow is PREFLIGHT-GATED on purpose: with any of the three Vercel
-# secrets missing it deploys nothing, comments nothing, and concludes green. It
-# has to be able to merge before the Vercel project it deploys to exists, and a
-# preflight that failed instead would make every pull request red for a reason
-# no author could fix. A pull request from a fork gets no secrets either, and
-# lands in the same green no-op rather than an error.
+# This workflow is PREFLIGHT-GATED on purpose: with either Cloudflare secret
+# missing it deploys nothing, comments nothing, and concludes green. It has
+# to be able to merge before the Cloudflare account it deploys to is
+# configured, and a preflight that failed instead would make every pull
+# request red for a reason no author could fix. A pull request from a fork
+# gets no secrets either, and lands in the same green no-op rather than an
+# error.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
 # One deploy at a time per pull request, and let a newer push supersede an
-# in-flight one — a superseded deploy would only race to re-point the alias.
+# in-flight one — a superseded deploy would only race to re-point the Worker.
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -26,8 +28,7 @@ permissions:
   pull-requests: write
 
 env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
   preview:
@@ -39,10 +40,10 @@ jobs:
       - name: Preflight
         id: preflight
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo "::notice::Vercel is not configured for this repository — skipping the preview deploy. See docs/operations/preview-deployment.md."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare is not configured for this repository — skipping the preview deploy. See docs/operations/preview-deployment.md."
             echo "armed=false" >> "$GITHUB_OUTPUT"
           else
             echo "armed=true" >> "$GITHUB_OUTPUT"
@@ -59,25 +60,67 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Dependency Installation
+        if: steps.preflight.outputs.armed == 'true'
+        run: npm install
+
+      - name: Build
+        if: steps.preflight.outputs.armed == 'true'
+        run: npm run build:worker
+
+      # Templates a per-pull-request copy of wrangler.jsonc rather than
+      # deploying with `--name`: issue #70 measured that `--name` renames the
+      # script without rewriting a WORKER_SELF_REFERENCE service binding that
+      # carries the old name. This tree binds no such service today, but the
+      # pipeline stays written to avoid the trap because issue #37 will grow
+      # the binding set. `unstable_readConfig` (the same "unstable" reader
+      # Wrangler and the OpenNext CLI use internally to parse this file) is
+      # deliberately not used here to avoid depending on that API surface for
+      # a value this simple; a plain JSONC read is enough because
+      # wrangler.jsonc's own comments are always whole lines (see the file
+      # itself) — this strips exactly those and nothing inside a value.
+      - name: Template the Wrangler config for this pull request
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          node <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const raw = readFileSync("wrangler.jsonc", "utf8");
+          const withoutComments = raw
+            .split("\n")
+            .filter((line) => !line.trim().startsWith("//"))
+            .join("\n");
+          const config = JSON.parse(withoutComments);
+          config.name = `tsuzuri-pr-${process.env.PR_NUMBER}`;
+          writeFileSync("wrangler.preview.json", `${JSON.stringify(config, null, 2)}\n`);
+          EOF
+
+      # Through the @opennextjs/cloudflare CLI, not `wrangler deploy`
+      # directly, so any cache-population step a later binding set requires
+      # (issue #37) runs rather than being silently skipped (issue #70). The
+      # deployed URL is read back from this command's own output rather than
+      # constructed from a guessed workers.dev subdomain, which is not
+      # knowable from this repository.
       - name: Deploy
         id: deploy
         if: steps.preflight.outputs.armed == 'true'
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
-          npx --yes vercel@latest build --token="$VERCEL_TOKEN"
-          url="$(npx --yes vercel@latest deploy --prebuilt --token="$VERCEL_TOKEN")"
-          # A deterministic alias, so a link shared early keeps working across
-          # pushes. The short SHA in the comment is what says whether the
-          # deployment behind it is current.
-          alias="tsuzuri-pr-${{ github.event.pull_request.number }}.vercel.app"
-          npx --yes vercel@latest alias set "$url" "$alias" --token="$VERCEL_TOKEN"
-          echo "alias=https://$alias" >> "$GITHUB_OUTPUT"
+          npm run deploy:worker -- --config wrangler.preview.json 2>&1 | tee deploy-output.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' deploy-output.log | tail -n1)"
+          if [ -z "$url" ]; then
+            echo "::error::Could not find the deployed Worker's URL in the deploy command's own output."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # A fresh comment per deploy rather than an edit, so the thread reads as a
-      # history of what was deployed when.
+      # A fresh comment per deploy rather than an edit, so the thread reads as
+      # a history of what was deployed when.
       - name: Comment the preview URL
         if: steps.preflight.outputs.armed == 'true'
         uses: actions/github-script@v7
@@ -89,10 +132,9 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               body: [
-                `**Preview deployed** — ${{ steps.deploy.outputs.alias }}`,
+                `**Preview deployed** — ${{ steps.deploy.outputs.url }}`,
                 ``,
-                `Built from \`${sha}\`. If that is not the branch head, this deploy is not current:`,
-                `the alias keeps serving the last deploy that built successfully.`,
+                `Built from \`${sha}\`.`,
               ].join("\n"),
             })
 
@@ -105,20 +147,68 @@ jobs:
       - name: Preflight
         id: preflight
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo "::notice::Vercel is not configured for this repository — nothing to tear down."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare is not configured for this repository — nothing to tear down."
             echo "armed=false" >> "$GITHUB_OUTPUT"
           else
             echo "armed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Remove the alias
+      - name: Checkout
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dependency Installation
+        if: steps.preflight.outputs.armed == 'true'
+        run: npm install
+
+      # Issue #70 measured `wrangler delete` exiting non-zero after having
+      # already deleted the script, so its exit code is not trusted here —
+      # the next step verifies deletion by checking the account's Worker list
+      # instead, which is the actual pass/fail gate.
+      - name: Delete the Worker
         if: steps.preflight.outputs.armed == 'true'
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -uo pipefail
+          npx wrangler delete "tsuzuri-pr-${{ github.event.pull_request.number }}" --force || true
+
+      # Cloudflare's REST "List Workers" endpoint
+      # (GET /accounts/{account_id}/workers/scripts) is what `wrangler` itself
+      # calls for this — confirmed by reading the Cloudflare SDK bundled
+      # inside the pinned `wrangler` package rather than assumed, since
+      # `wrangler` itself has no CLI subcommand that lists every Worker in
+      # the account. A script's `id` in that response is its name.
+      - name: Verify the Worker is gone
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER_NAME: tsuzuri-pr-${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          alias="tsuzuri-pr-${{ github.event.pull_request.number }}.vercel.app"
-          npx --yes vercel@latest alias rm "$alias" --yes --token="$VERCEL_TOKEN"
+          scripts="$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts")"
+          if echo "$scripts" | node -e "
+            let data = '';
+            process.stdin.on('data', (chunk) => { data += chunk; });
+            process.stdin.on('end', () => {
+              const body = JSON.parse(data);
+              const names = (body.result ?? []).map((script) => script.id);
+              process.exit(names.includes(process.env.WORKER_NAME) ? 1 : 0);
+            });
+          "; then
+            echo "Worker $WORKER_NAME confirmed removed from the account's Worker list."
+          else
+            echo "::error::Worker $WORKER_NAME still appears in the account's Worker list after teardown."
+            exit 1
+          fi
