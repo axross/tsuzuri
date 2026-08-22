@@ -158,15 +158,17 @@ Reading node index 6 — the paragraph "Roll it out slowly." under `## Rollout`
   "documentDigest": "3d2dd3c0bc35c3f30c444a2979d50fc78c81a99c1faaedac5b13e3d9a340c0c8",
   "index": 6,
   "type": "paragraph",
+  "nodeDigest": "8537af656ab8b095602c3124f6da0e3ff05c202437f9c74bea67d7b63c02a400",
   "start": 187,
   "end": 206,
-  "nodeDigest": "8537af656ab8b095602c3124f6da0e3ff05c202437f9c74bea67d7b63c02a400",
   "markdown": "Roll it out slowly."
 }
 ```
 
-The first four fields are the address itself; `start`, `end` and `markdown`
-are what the caller asked for, and a write does not send them back.
+`documentDigest`, `index`, `type` and `nodeDigest` are the address itself, and
+are grouped first for that reason. `start`, `end` and `markdown` are what the
+caller asked for rather than part of the address, and a write does not send
+them back.
 
 A write replacing that paragraph presents all four address values back,
 alongside the operation to perform and the new content:
