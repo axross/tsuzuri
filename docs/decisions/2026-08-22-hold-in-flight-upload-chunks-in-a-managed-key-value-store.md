@@ -105,7 +105,7 @@ limit: 39 MiB accepted, 40 MiB refused. A 50 MB source can never be committed
 as one blob, whatever carries its bytes there — which is what makes
 `2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`'s
 choice load-bearing rather than a style preference. That record's own
-measured outputs — 77 KB to 684 KB across the six inputs it tried, WebP at a
+measured outputs — 30 KB to 684 KB across the six inputs it tried, WebP at a
 2000px long edge and quality 80 — land far inside the 39 MiB ceiling this
 record measured, and every one of them exists before this record's
 completion step ever asks GitHub to accept a blob.
