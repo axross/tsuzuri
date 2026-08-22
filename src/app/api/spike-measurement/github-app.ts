@@ -1,0 +1,168 @@
+import { createSign, timingSafeEqual } from "node:crypto";
+
+/**
+ * Throwaway measurement scaffolding for issue #6. This file is deleted
+ * before the pull request leaves draft — see the decision record it feeds.
+ *
+ * It reads `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `SPIKE_SCRATCH_REPO`,
+ * and `SPIKE_SHARED_SECRET` straight from `process.env` rather than through
+ * `src/shared/lib/env.ts`. That wiring is issue #16's own work; pulling it
+ * forward here is a non-goal this file deliberately does not take on.
+ *
+ * Nothing in this module may log, return, or otherwise emit the App's
+ * private key or a minted installation access token — see
+ * docs/conventions/security.md.
+ */
+
+const GITHUB_API_ROOT = "https://api.github.com";
+
+/** A PEM commonly survives an environment-variable field with literal `\n` two-character sequences instead of newlines. */
+function normalizePrivateKey(rawKey: string): string {
+	return rawKey.includes("\\n") ? rawKey.replaceAll("\\n", "\n") : rawKey;
+}
+
+function base64UrlEncode(input: Buffer | string): string {
+	const buffer = typeof input === "string" ? Buffer.from(input) : input;
+	return buffer
+		.toString("base64")
+		.replaceAll("+", "-")
+		.replaceAll("/", "_")
+		.replace(/=+$/, "");
+}
+
+/** An RS256 App JWT: `iat` backdated 60s, `exp` at most 10 minutes past `iat`, `iss` the App ID. */
+function signAppJwt(appId: string, privateKey: string): string {
+	const now = Math.floor(Date.now() / 1000);
+	const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+	const payload = base64UrlEncode(
+		JSON.stringify({
+			iat: now - 60,
+			exp: now + 540,
+			iss: Number.parseInt(appId, 10),
+		}),
+	);
+	const signingInput = `${header}.${payload}`;
+
+	const signer = createSign("RSA-SHA256");
+	signer.update(signingInput);
+	signer.end();
+	const signature = base64UrlEncode(signer.sign(privateKey));
+
+	return `${signingInput}.${signature}`;
+}
+
+export interface ScratchRepo {
+	owner: string;
+	repo: string;
+}
+
+/** Parses `SPIKE_SCRATCH_REPO` (`owner/repo`) into its two parts. */
+export function getScratchRepo(): ScratchRepo {
+	const value = process.env.SPIKE_SCRATCH_REPO;
+	if (!value) {
+		throw new Error("SPIKE_SCRATCH_REPO is not configured");
+	}
+	const [owner, repo] = value.split("/");
+	if (!owner || !repo) {
+		throw new Error("SPIKE_SCRATCH_REPO must be in owner/repo form");
+	}
+	return { owner, repo };
+}
+
+/** A bearer-authenticated request against the GitHub REST API. `token` is either the App JWT or a minted installation access token — never logged, and never included in a thrown error message. */
+export async function githubRequest(
+	token: string,
+	path: string,
+	init: RequestInit = {},
+): Promise<Response> {
+	return fetch(`${GITHUB_API_ROOT}${path}`, {
+		...init,
+		headers: {
+			accept: "application/vnd.github+json",
+			"x-github-api-version": "2022-11-28",
+			authorization: `Bearer ${token}`,
+			...init.headers,
+		},
+	});
+}
+
+export interface MintedToken {
+	token: string;
+	ms: number;
+}
+
+/**
+ * Mints a fresh installation access token for the scratch repository's
+ * installation: builds an RS256 App JWT, finds the installation, then mints
+ * its access token. Per docs/conventions/security.md this MUST be called
+ * immediately before the request that uses the token, and re-called rather
+ * than reused across a lengthy sequence.
+ */
+export async function mintInstallationToken(): Promise<MintedToken> {
+	const appId = process.env.GITHUB_APP_ID;
+	const rawPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY;
+	if (!appId || !rawPrivateKey) {
+		throw new Error(
+			"GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY is not configured",
+		);
+	}
+	const privateKey = normalizePrivateKey(rawPrivateKey);
+	const { owner, repo } = getScratchRepo();
+
+	const start = performance.now();
+	const jwt = signAppJwt(appId, privateKey);
+
+	const installationResponse = await githubRequest(
+		jwt,
+		`/repos/${owner}/${repo}/installation`,
+	);
+	if (!installationResponse.ok) {
+		throw new Error(
+			`Failed to find installation for ${owner}/${repo}: ${installationResponse.status}`,
+		);
+	}
+	const installation = (await installationResponse.json()) as { id: number };
+
+	const tokenResponse = await githubRequest(
+		jwt,
+		`/app/installations/${installation.id}/access_tokens`,
+		{ method: "POST" },
+	);
+	if (!tokenResponse.ok) {
+		throw new Error(
+			`Failed to mint installation access token: ${tokenResponse.status}`,
+		);
+	}
+	const minted = (await tokenResponse.json()) as { token: string };
+
+	return { token: minted.token, ms: performance.now() - start };
+}
+
+/**
+ * The shared-secret guard every spike-measurement route runs first. Returns
+ * a `Response` to send immediately, or `null` when the request may proceed.
+ *
+ * A preview URL is public and these routes write Git objects with a real
+ * App key, so an unset `SPIKE_SHARED_SECRET` MUST make the route invisible
+ * (404) rather than merely unauthenticated, and a set one MUST be checked
+ * with a constant-time comparison over equal-length buffers.
+ */
+export function guardSpikeRequest(request: Request): Response | null {
+	const secret = process.env.SPIKE_SHARED_SECRET;
+	if (!secret) {
+		return new Response(null, { status: 404 });
+	}
+
+	const provided = request.headers.get("x-spike-secret") ?? "";
+	const secretBuffer = Buffer.from(secret);
+	const providedBuffer = Buffer.from(provided);
+	const authorized =
+		secretBuffer.length === providedBuffer.length &&
+		timingSafeEqual(secretBuffer, providedBuffer);
+
+	if (!authorized) {
+		return Response.json({ error: "Unauthorized" }, { status: 401 });
+	}
+
+	return null;
+}
