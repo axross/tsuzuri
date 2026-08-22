@@ -47,8 +47,8 @@ documented alias count.
 | Size | What works |
 | --- | --- |
 | Up to 1 MB | The Contents API returns base64 `content` in an ordinary response |
-| 1 MB – 100 MB | `Accept: application/vnd.github.raw` is **required**; the object media type returns empty `content` |
-| Over 100 MB | Unsupported. The Git Blobs API stops at 100 MB too |
+| 1 MB – 100 MB | `Accept: application/vnd.github.raw+json`, or the object media type, both work; the object media type returns empty `content` |
+| Over 100 MB | Unsupported for reading, through either API. **Creating** a Git blob is refused well before that — see below |
 
 Files over 100 MB are out of scope for this project, so **video is effectively
 unsupported** and a change MUST NOT introduce a path that assumes otherwise.
@@ -60,6 +60,17 @@ server-side before they are committed, targeting under 1 MB (roughly a
 the project's own justification for storing media in the repository at all,
 not a nice-to-have: see
 [the decision to store media in the linked repository](../decisions/2026-08-21-store-media-in-the-linked-repository-rather-than-in-object-storage.md).
+
+Creating a blob has its own, lower, and wholly undocumented ceiling — the
+100 MB figure above is the Git Blobs API's *read* limit, not its create one.
+A bisect run on 2026-08-22 found the largest blob GitHub's Git Blobs API
+would create at 39 MiB and the smallest it refused at 40 MiB, roughly 2.5x
+below the 100 MB read limit and unstated anywhere in GitHub's own
+documentation. A design MUST NOT assume 100 MB is available to a blob write;
+re-encoding under 1 MB (above) is what keeps every object this project
+commits well clear of that ceiling. See
+[the decision to hold in-flight upload chunks in a managed key-value store](../decisions/2026-08-22-hold-in-flight-upload-chunks-in-a-managed-key-value-store.md)
+for the measurement and what it means for media transfer.
 
 ## Always Check `truncated`
 
@@ -152,10 +163,21 @@ figure this document has not verified — see the last section.
 ## Stay Inside the Hosting Platform's Body Limit
 
 Vercel Functions cap a request body at **4.5 MB**, and it is an infrastructure
-limit no configuration changes. Since media never goes to external storage,
-every uploaded byte crosses that boundary, so media transfer MUST be split
-into chunks in both directions. Base64 inflates a payload by about a third, so
-size the chunks against 4.5 MB of *encoded* bytes.
+limit no configuration changes. The same cap covers the response body too,
+under its own `FUNCTION_RESPONSE_PAYLOAD_TOO_LARGE` error code — but a bisect
+run on 2026-08-22 delivered buffered responses up to 64 MiB and streamed
+responses up to 200 MiB in full, and could not reproduce a response-side
+rejection at any size tried. The **download** direction therefore needs no
+chunking. The **upload** direction does, because its rejection was reproduced
+directly: a byte-exact bisect against a do-nothing echo route found the
+largest accepted request body at 4,493,986 measured bytes, with request
+headers counted against that same budget rather than exempt from it. That
+budget is **raw**, not encoded — chunks cross the browser-to-Function hop as
+raw bytes, and base64 is forced only at the GitHub boundary, never on this
+hop — so size chunks against raw bytes, not against 4.5 MB of *encoded* ones.
+See
+[the decision to hold in-flight upload chunks in a managed key-value store](../decisions/2026-08-22-hold-in-flight-upload-chunks-in-a-managed-key-value-store.md)
+for the chunk size this project uses and the arithmetic behind it.
 
 ## Where These Figures Came From
 
@@ -165,7 +187,9 @@ size the chunks against 4.5 MB of *encoded* bytes.
 - [REST API endpoints for Git trees](https://docs.github.com/en/rest/git/trees) — the recursive ceiling and `truncated`
 - [GraphQL reference: Commits](https://docs.github.com/en/graphql/reference/commits) — `createCommitOnBranch` and `expectedHeadOid`
 - [Git LFS billing](https://docs.github.com/en/billing/concepts/product-billing/git-lfs) — the quotas that rule LFS out
-- [Vercel Functions limitations](https://vercel.com/docs/functions/limitations) — the 4.5 MB request body cap
+- [Git blobs](https://docs.github.com/en/rest/git/blobs) — the blob media types and the 100 MB *read* ceiling; blob **creation**'s own ceiling is undocumented and was measured directly (see the decision record cited above)
+- [Repository contents](https://docs.github.com/en/rest/repos/contents) — the file-size tier media types
+- [Vercel Functions limitations](https://vercel.com/docs/functions/limitations) — the 4.5 MB cap on both the request and the response body
 
 ## What Is Still Unverified
 
@@ -186,3 +210,8 @@ change depends on them:
   argument alone — so it is recorded as unverified rather than cited.
 - The thresholds at which GitHub Support actually contacts a repository owner
   about repository health. Only the recommendations are published.
+- What retention period, if any, GitHub applies to a Git object nothing
+  references. GitHub's own account of unreachable-object handling describes
+  pruning as time-based (cruft packs, aged by an auxiliary `.mtimes` file) but
+  does not publish the window. Searched 2026-08-22 across docs.github.com,
+  github.blog, and support.github.com with nothing found.
