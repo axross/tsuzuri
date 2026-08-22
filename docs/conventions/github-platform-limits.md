@@ -275,21 +275,38 @@ figure this document has not verified — see the last section.
 
 ## Stay Inside the Hosting Platform's Body Limit
 
-Vercel Functions cap a request body at **4.5 MB**, and it is an infrastructure
-limit no configuration changes. The same cap covers the response body too,
-under its own `FUNCTION_RESPONSE_PAYLOAD_TOO_LARGE` error code — but a bisect
-run on 2026-08-22 delivered buffered responses up to 64 MiB and streamed
-responses up to 200 MiB in full, and could not reproduce a response-side
-rejection at any size tried. The **download** direction therefore needs no
-chunking. The **upload** direction does, because its rejection was reproduced
-directly: a byte-exact bisect against a do-nothing echo route found the
-largest accepted request body at 4,493,986 measured bytes, with request
-headers counted against that same budget rather than exempt from it. That
-budget is **raw**, not encoded — chunks cross the browser-to-Function hop as
-raw bytes, and base64 is forced only at the GitHub boundary, never on this
-hop — so size chunks against raw bytes, not against 4.5 MB of *encoded* ones.
-A chunk of 4 MiB leaves roughly 300 KB of that budget for the request's own
-headers.
+This project is no longer hosted on Vercel, and Vercel Functions' 4.5 MB
+request-body cap — this section's previous subject, established by a
+byte-exact bisect against a do-nothing echo route that found the largest
+accepted request body at 4,493,986 measured bytes — no longer applies to it.
+That measurement is not simply gone: what replaces it is Cloudflare's own
+documented Workers limit, below, and the practical consequence follows from
+how much larger it is.
+
+Cloudflare's request-body size limit depends on the **Cloudflare account
+plan**, not on the Workers plan, and is enforced with an HTTP 413 past it:
+
+| Cloudflare plan | Maximum request body size |
+| ---------------- | -------------------------- |
+| Free | 100 MB |
+| Pro | 100 MB |
+| Business | 200 MB |
+| Enterprise | 500 MB by default, raisable on request |
+
+Cloudflare states plainly that it enforces **no limit on response body
+size** — the download direction was already unconstrained under the prior
+host too, so nothing changes there. What changes is the **upload** direction:
+Vercel's 4.5 MB cap was the reason this project's design work assumed
+chunked upload was mandatory (issue #39). Even the lowest tier here, 100 MB,
+sits more than twenty times above that old cap, and comfortably above the
+39 MiB largest blob GitHub's own Git Blobs API was measured to accept for
+**creation** — see "Respect the File-Size Tiers" above — which is the actual
+ceiling an upload has to clear, tighter than GitHub's 100 MB *read* limit for
+the same endpoint. So **the upload direction no longer needs chunking on the
+hosting platform's account either.** GitHub's two blob ceilings, 100 MB to
+read and roughly 39 MiB to create, are unchanged by this move and are now the
+binding limits on media size, rather than anything the hosting platform
+imposes.
 
 ## Where These Figures Came From
 
@@ -301,7 +318,7 @@ headers.
 - [Git LFS billing](https://docs.github.com/en/billing/concepts/product-billing/git-lfs) — the quotas that rule LFS out
 - [Git blobs](https://docs.github.com/en/rest/git/blobs) — the blob media types and the 100 MB *read* ceiling; blob **creation**'s own ceiling is undocumented and was measured directly
 - [Repository contents](https://docs.github.com/en/rest/repos/contents) — the file-size tier media types
-- [Vercel Functions limitations](https://vercel.com/docs/functions/limitations) — the 4.5 MB cap on both the request and the response body
+- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), § "Request and response limits", read 2026-08-22 — the request-body size ceiling by Cloudflare account plan, and that response body size carries no enforced limit
 - [Using the GraphQL API for Discussions](https://docs.github.com/en/graphql/guides/using-the-graphql-api-for-discussions) — that discussions are GraphQL-only, and `replyToId`'s meaning
 - [Webhook events and payloads](https://docs.github.com/en/webhooks/webhook-events-and-payloads) — the "Discussions" repository permission a GitHub App needs
 - [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app) — that a user access token reaches only what the user and the app can both reach
