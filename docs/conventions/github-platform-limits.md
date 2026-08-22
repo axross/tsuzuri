@@ -135,6 +135,58 @@ Handling that event by writing again is an infinite loop. Webhook handling
 MUST filter out commits authored by the application's own bot identity before
 acting on them.
 
+## Treat a Discussion Comment as Two Levels Deep and Unsanitized
+
+Discussions are reachable through GraphQL only; there is no REST equivalent for
+a repository's discussions, so a change that touches them MUST go through the
+GraphQL API.
+
+A discussion holds top-level comments, and each top-level comment holds replies.
+**A reply holds nothing.** Passing `replyToId` a comment that is itself a reply
+fails with type `UNPROCESSABLE` and the message `Parent comment is already in a
+thread, cannot reply to it`. A change MUST NOT design a comment tree deeper than
+those two levels, and MUST NOT assume the ceiling is permanent: GitHub publishes
+no maximum depth, so this figure was measured rather than read, and re-measuring
+is the only way to know it still holds.
+
+The read shape follows the same two levels. `Discussion.comments` returns **only
+top-level comments** — a reply is absent from it — and each node carries its own
+`replies` connection. Code that counts comments from `comments.totalCount` is
+counting threads, not comments.
+
+Three writes, three tokens:
+
+| Write | Token |
+| ----- | ----- |
+| Creating a comment thread that does not exist yet | the installation access token |
+| Posting a reader's top-level comment | that reader's user access token |
+| Posting a reader's reply | that reader's user access token |
+
+Both token kinds depend on the companion app holding the **Discussions**
+repository permission at write level, which is fixed when the app is registered
+rather than at runtime. A user access token additionally reaches only what the
+reader and the app can *both* reach, so a reader who is not a collaborator can
+never comment on a private repository's discussions, however the flow is
+arranged. The operative condition there is access rather than visibility: a
+token that *does* reach a private repository creates and comments on its
+discussions without difficulty. A surface that meets this case MUST report
+comments as unavailable and name the repository's visibility as the reason —
+never an empty thread, which reads as "nobody has commented", and never an
+authorization error, which reads as a fault.
+
+**GitHub stores a comment body exactly as written.** Reading `body` back returns
+the bytes that were posted, including raw `<script>` tags, `onerror` attributes,
+and `javascript:` link targets. Only `bodyHTML` — GitHub's own rendering — is
+sanitized, and only partly: `<b>` and `<details>` survive as markup, `<script>`,
+`<iframe>` and `<style>` come back escaped, an `<img>` loses its `onerror`, and
+an anchor with a `javascript:`, `data:`, or `vbscript:` target loses the anchor
+and keeps its text.
+
+Since this project serves Markdown rather than GitHub's HTML, it serves `body`.
+Any path that returns a comment to a consumer MUST therefore sanitize it here.
+There is no upstream sanitization to fall back on, and a change that assumes
+GitHub already cleaned the text is wrong.
+
 ## Never Link `raw.githubusercontent.com`
 
 Storing media in a repository is sanctioned; serving it from GitHub's raw host
@@ -166,6 +218,14 @@ size the chunks against 4.5 MB of *encoded* bytes.
 - [GraphQL reference: Commits](https://docs.github.com/en/graphql/reference/commits) — `createCommitOnBranch` and `expectedHeadOid`
 - [Git LFS billing](https://docs.github.com/en/billing/concepts/product-billing/git-lfs) — the quotas that rule LFS out
 - [Vercel Functions limitations](https://vercel.com/docs/functions/limitations) — the 4.5 MB request body cap
+- [Using the GraphQL API for Discussions](https://docs.github.com/en/graphql/guides/using-the-graphql-api-for-discussions) — that discussions are GraphQL-only, and `replyToId`'s meaning
+- [Webhook events and payloads](https://docs.github.com/en/webhooks/webhook-events-and-payloads) — the "Discussions" repository permission a GitHub App needs
+- [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app) — that a user access token reaches only what the user and the app can both reach
+
+The two-level reply ceiling, the `UNPROCESSABLE` message, and the storage and
+rendering behaviour of a comment body have no documented source. They were
+measured against the live GraphQL API on 2026-08-22 and are recorded here
+because nothing published states them.
 
 ## What Is Still Unverified
 
@@ -186,3 +246,12 @@ change depends on them:
   argument alone — so it is recorded as unverified rather than cited.
 - The thresholds at which GitHub Support actually contacts a repository owner
   about repository health. Only the recommendations are published.
+- Whether the discussion writes above behave the same for the identities this
+  project will actually use. Every measurement was taken with a fine-grained
+  personal access token belonging to the repository's own owner; neither an
+  installation access token nor a reader who is not a collaborator was
+  exercised. The token table states what the permission model says, not what
+  was observed, and a change that turns one of those rows on MUST verify it.
+- Whether the two-level reply ceiling is a stable platform property or an
+  implementation detail. It is measured and undocumented, so it may move
+  without notice.
