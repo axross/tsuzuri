@@ -20,11 +20,14 @@ import {
 } from "@cf-wasm/photon/node";
 import {
 	computeResizedDimensions,
+	concurrentMeasurementRejectedBody,
 	detectAlphaInRgba,
 	type EncodedOutput,
 	type FormatKey,
 	parseSpikeParams,
+	releaseMeasurementLock,
 	runPipeline,
+	tryAcquireMeasurementLock,
 	unsupportedReport,
 } from "../spike-encode-shared/measure";
 
@@ -40,6 +43,18 @@ const ENCODER_VERSION = "0.4.0";
 
 async function decode(bytes: Uint8Array): Promise<PhotonImage> {
 	return PhotonImage.new_from_byteslice(bytes);
+}
+
+/**
+ * `PhotonImage` wraps Rust/WASM linear memory that V8's GC does not reclaim
+ * on its own; `@cf-wasm/photon`'s own README frees every image explicitly.
+ * A `FinalizationRegistry` fallback exists but runs only if/when V8 happens
+ * to GC the wrapper — not deterministically, and unlikely mid-ladder
+ * (Finding 1). `free()` has no `isDeleted()`-style guard of its own, so a
+ * double-dispose is caught by the driver's `safeDispose` instead.
+ */
+function disposePhotonImage(image: PhotonImage): void {
+	image.free();
 }
 
 async function resize(
@@ -100,25 +115,40 @@ export async function GET(request: Request): Promise<Response> {
 		);
 	}
 
-	const report = await runPipeline({
-		encoder: ENCODER,
-		encoderVersion: ENCODER_VERSION,
-		fixtureKey: params.fixtureKey,
-		format: params.format,
-		longEdge: params.longEdge,
-		quality: params.quality,
-		ladder: params.ladder,
-		decode,
-		// Photon decodes a GIF as a single static frame (the `image` crate's
-		// `load_from_memory` does not carry multiple frames into a
-		// `DynamicImage`); the fixture is objectively animated even though
-		// Photon flattens it, so this reports the fixture's own nature rather
-		// than what Photon retained.
-		isInputAnimated: () => params.fixtureKey === "animated-gif",
-		resize,
-		encode,
-	});
+	if (!tryAcquireMeasurementLock()) {
+		return Response.json(concurrentMeasurementRejectedBody(), {
+			status: 409,
+		});
+	}
+	try {
+		const report = await runPipeline({
+			encoder: ENCODER,
+			encoderVersion: ENCODER_VERSION,
+			fixtureKey: params.fixtureKey,
+			format: params.format,
+			longEdge: params.longEdge,
+			quality: params.quality,
+			ladder: params.ladder,
+			// Photon decodes and resizes eagerly into a plain PhotonImage, so
+			// decode/resize/encode are real, separately-measurable phases
+			// (Finding 2) — unlike sharp/wasm-vips.
+			pipelineKind: "eager",
+			decode,
+			// Photon decodes a GIF as a single static frame (the `image` crate's
+			// `load_from_memory` does not carry multiple frames into a
+			// `DynamicImage`); the fixture is objectively animated even though
+			// Photon flattens it, so this reports the fixture's own nature rather
+			// than what Photon retained.
+			isInputAnimated: () => params.fixtureKey === "animated-gif",
+			resize,
+			encode,
+			disposeDecoded: disposePhotonImage,
+			disposeResized: disposePhotonImage,
+		});
 
-	// Always 200: a failing encoder still produces a data point, in `error`.
-	return Response.json(report);
+		// Always 200: a failing encoder still produces a data point, in `error`.
+		return Response.json(report);
+	} finally {
+		releaseMeasurementLock();
+	}
 }

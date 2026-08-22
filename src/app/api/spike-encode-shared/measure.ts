@@ -98,6 +98,81 @@ function clampInt(
 }
 
 // ---------------------------------------------------------------------------
+// Cold-start marker + single-instance concurrency guard (Finding 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Captured the moment this module is first evaluated in a warm instance —
+ * i.e. on a cold start. Lets a request report how long the instance has been
+ * alive, which `process.memoryUsage()` alone cannot answer.
+ */
+const instanceStartedAtMs = Date.now();
+
+/** Flips to `true` the first time a measurement actually runs in this instance. */
+let instanceHasServedAMeasurement = false;
+
+export interface InstanceInfo {
+	isFirstRequestForInstance: boolean;
+	instanceUptimeMs: number;
+}
+
+/**
+ * Reports whether this is the first measurement this warm instance has
+ * served and how long the instance has been alive, then marks it served.
+ * Call once per measurement attempt (including an `unsupported` short
+ * circuit), not for a 400/409 that never reaches the pipeline.
+ */
+export function readInstanceInfo(): InstanceInfo {
+	const isFirstRequestForInstance = !instanceHasServedAMeasurement;
+	instanceHasServedAMeasurement = true;
+	return {
+		isFirstRequestForInstance,
+		instanceUptimeMs: Date.now() - instanceStartedAtMs,
+	};
+}
+
+/**
+ * Guards against two overlapping measurements contaminating each other's
+ * `process.memoryUsage()` reading within ONE warm instance — fluid compute
+ * can route several invocations to the same instance, and that reading is
+ * process-wide, so two concurrent measurements would each report a peak
+ * inflated by the other's live memory.
+ *
+ * This guards one instance only, not the whole deployment: Vercel may still
+ * spin up a second instance and run a second request genuinely in parallel
+ * there, which is fine, because that instance's memory really is separate.
+ * Each `spike-*` route is bundled as its own function, so this module-level
+ * flag — one copy per route's bundle — lines up exactly with "this route's
+ * warm instance", not with the four routes combined.
+ */
+let measurementInFlight = false;
+
+/** Returns `true` and marks the instance busy, or `false` if already busy. */
+export function tryAcquireMeasurementLock(): boolean {
+	if (measurementInFlight) return false;
+	measurementInFlight = true;
+	return true;
+}
+
+/** Always call from a `finally` so a throw still releases the lock. */
+export function releaseMeasurementLock(): void {
+	measurementInFlight = false;
+}
+
+/** The 409 body a route returns when the guard above refuses a request. */
+export function concurrentMeasurementRejectedBody(): {
+	error: { name: string; message: string };
+} {
+	return {
+		error: {
+			name: "ConcurrentMeasurementRejected",
+			message:
+				"another measurement is already running in this warm instance; process.memoryUsage() is process-wide, so running two at once would contaminate both peak-memory readings. Retry once the in-flight request completes.",
+		},
+	};
+}
+
+// ---------------------------------------------------------------------------
 // Fixture fetch + verification
 // ---------------------------------------------------------------------------
 
@@ -344,9 +419,27 @@ export interface RunReport {
 	} | null;
 	durationsMs: {
 		fetch: number | null;
+		/**
+		 * The real wall-clock span of decode + resize + encode combined,
+		 * whatever the encoder. Populated whenever that span was measured,
+		 * even when the three fields below are `null`.
+		 */
+		total: number | null;
+		/**
+		 * `null` for a "lazy" encoder (Finding 2: sharp and wasm-vips are both
+		 * libvips, which is demand-driven — decode/resize only build a
+		 * pipeline description, and the real work happens on the final write,
+		 * so a per-phase split would be fictional). See `phaseSplitUnavailable`
+		 * for why. Populated for an "eager" encoder.
+		 */
 		decode: number | null;
 		resize: number | null;
 		encode: number | null;
+		/** Set only when decode/resize/encode above are `null` because the
+		 * encoder's pipeline is lazy — never for the structural `null` that
+		 * ladder mode's resize/encode already carry (its per-rung durations
+		 * live in `ladder[].durationMs` instead). */
+		phaseSplitUnavailable: { reason: string } | null;
 	};
 	memory: {
 		peakRssBytes: number | null;
@@ -360,6 +453,7 @@ export interface RunReport {
 	ladder: LadderTrial[] | null;
 	unsupported: { reason: string } | null;
 	error: ErrorInfo | null;
+	instance: InstanceInfo;
 }
 
 /**
@@ -381,7 +475,14 @@ export function unsupportedReport(opts: {
 		fixture: opts.fixtureKey,
 		input: null,
 		output: null,
-		durationsMs: { fetch: null, decode: null, resize: null, encode: null },
+		durationsMs: {
+			fetch: null,
+			total: null,
+			decode: null,
+			resize: null,
+			encode: null,
+			phaseSplitUnavailable: null,
+		},
 		memory: {
 			peakRssBytes: null,
 			peakHeapUsedBytes: null,
@@ -391,7 +492,29 @@ export function unsupportedReport(opts: {
 		ladder: null,
 		unsupported: { reason: opts.reason },
 		error: null,
+		instance: readInstanceInfo(),
 	};
+}
+
+/**
+ * Disposes a decoded/resized intermediate's own WASM or native handle
+ * (Findings 1 and 3: `@cf-wasm/photon`'s `PhotonImage` and wasm-vips's
+ * `Image` both wrap linear memory that V8's GC does not reclaim
+ * deterministically). Guarded so a double-dispose or an already-collected
+ * handle throws here, quietly, rather than masking the real pipeline
+ * result. A no-op when the encoder declared no hook (`sharp`, `@jsquash/*`)
+ * or when `value` is nullish (e.g. `resize()` never ran before a throw).
+ */
+function safeDispose<T>(
+	dispose: ((value: T) => void) | undefined,
+	value: T | null | undefined,
+): void {
+	if (!dispose || value === null || value === undefined) return;
+	try {
+		dispose(value);
+	} catch {
+		// Intentionally swallowed — see the doc comment above.
+	}
 }
 
 export interface RunPipelineOptions<Decoded, Resized> {
@@ -402,6 +525,15 @@ export interface RunPipelineOptions<Decoded, Resized> {
 	longEdge: number;
 	quality: number;
 	ladder: boolean;
+	/**
+	 * Whether this encoder's decode/resize calls do real work as they're
+	 * called ("eager": `@jsquash/*`, `@cf-wasm/photon`) or only build a
+	 * pipeline description realized on the final write ("lazy": `sharp` and
+	 * `wasm-vips`, both libvips). Drives whether the driver reports a real
+	 * decode/resize/encode split or nulls those out with a reason and reports
+	 * only `total` (Finding 2) — see `RunReport.durationsMs`.
+	 */
+	pipelineKind: "lazy" | "eager";
 	decode: (bytes: Uint8Array) => Promise<Decoded>;
 	isInputAnimated: (decoded: Decoded) => boolean;
 	resize: (decoded: Decoded, longEdge: number) => Promise<Resized>;
@@ -412,6 +544,47 @@ export interface RunPipelineOptions<Decoded, Resized> {
 	) => Promise<EncodedOutput>;
 	/** Only meaningful for the animated-gif fixture; `null` elsewhere. */
 	isOutputAnimated?: (encoded: EncodedOutput) => boolean;
+	/**
+	 * Frees the decoded source's own handle (Findings 1 and 3). Left unset
+	 * for `sharp` and `@jsquash/*`, which need no explicit disposal — an
+	 * unset hook is a no-op in the driver, not an invented one that implies
+	 * disposal is needed where it isn't.
+	 */
+	disposeDecoded?: (decoded: Decoded) => void;
+	/** Frees a resized intermediate's own handle. Same rationale as above. */
+	disposeResized?: (resized: Resized) => void;
+}
+
+const LAZY_PIPELINE_REASON =
+	"this encoder's pipeline is lazy: decode/resize only build a pipeline description, and the real work happens on the final write, so a per-phase split would be fictional (see plan finding #2). `total` below is the real span.";
+
+/** Builds the non-ladder `durationsMs` field per `pipelineKind` (Finding 2). */
+function buildDurationsMs(
+	pipelineKind: "lazy" | "eager",
+	fetchMs: number | null,
+	decodeMs: number,
+	resizeMs: number,
+	encodeMs: number,
+): RunReport["durationsMs"] {
+	const total = decodeMs + resizeMs + encodeMs;
+	if (pipelineKind === "lazy") {
+		return {
+			fetch: fetchMs,
+			total,
+			decode: null,
+			resize: null,
+			encode: null,
+			phaseSplitUnavailable: { reason: LAZY_PIPELINE_REASON },
+		};
+	}
+	return {
+		fetch: fetchMs,
+		total,
+		decode: decodeMs,
+		resize: resizeMs,
+		encode: encodeMs,
+		phaseSplitUnavailable: null,
+	};
 }
 
 /**
@@ -420,25 +593,33 @@ export interface RunPipelineOptions<Decoded, Resized> {
  * peak memory around the whole operation. Never throws — a failure at any
  * stage becomes `error` on the returned report so the route can always
  * respond 200 with a data point.
+ *
+ * Disposes the decoded source and (for the non-ladder path) the resized
+ * intermediate via `opts.disposeDecoded` / `opts.disposeResized` from a
+ * `finally` block, so a throw still disposes (Findings 1 and 3). Ladder mode
+ * disposes its own per-rung resized intermediates and its decoded source
+ * internally — see `runLadder` — so this function's `finally` skips both
+ * when `opts.ladder` is set, to avoid double-freeing what `runLadder`
+ * already freed (a double-dispose is guarded and harmless either way, but
+ * skipping it keeps "disposed once, right after the last rung" true in fact
+ * and not just in effect).
  */
 export async function runPipeline<Decoded, Resized>(
 	opts: RunPipelineOptions<Decoded, Resized>,
 ): Promise<RunReport> {
 	const fixture = FIXTURES[opts.fixtureKey];
 	const sampler = startPeakMemorySampler();
-	const durationsMs: RunReport["durationsMs"] = {
-		fetch: null,
-		decode: null,
-		resize: null,
-		encode: null,
-	};
+	const instance = readInstanceInfo();
+	let fetchMs: number | null = null;
 	let input: RunReport["input"] = null;
 	let inputAnimated: boolean | null = null;
+	let decoded: Decoded | undefined;
+	let resized: Resized | undefined;
 
 	try {
 		const fetchStart = performance.now();
 		const fetched = await fetchAndVerifyFixture(opts.fixtureKey);
-		durationsMs.fetch = performance.now() - fetchStart;
+		fetchMs = performance.now() - fetchStart;
 		input = {
 			bytes: fetched.bytes.byteLength,
 			mime: fixture.mime,
@@ -448,26 +629,28 @@ export async function runPipeline<Decoded, Resized>(
 		};
 
 		const decodeStart = performance.now();
-		const decoded = await opts.decode(fetched.bytes);
-		durationsMs.decode = performance.now() - decodeStart;
+		decoded = await opts.decode(fetched.bytes);
+		const decodeMs = performance.now() - decodeStart;
 		inputAnimated = opts.isInputAnimated(decoded);
 
 		if (opts.ladder) {
 			return await runLadder(opts, decoded, {
 				input,
 				inputAnimated,
-				durationsMs,
+				fetchMs,
+				decodeMs,
 				sampler,
+				instance,
 			});
 		}
 
 		const resizeStart = performance.now();
-		const resized = await opts.resize(decoded, opts.longEdge);
-		durationsMs.resize = performance.now() - resizeStart;
+		resized = await opts.resize(decoded, opts.longEdge);
+		const resizeMs = performance.now() - resizeStart;
 
 		const encodeStart = performance.now();
 		const encoded = await opts.encode(resized, opts.format, opts.quality);
-		durationsMs.encode = performance.now() - encodeStart;
+		const encodeMs = performance.now() - encodeStart;
 
 		const memory = sampler.stop();
 		return {
@@ -482,7 +665,13 @@ export async function runPipeline<Decoded, Resized>(
 				height: encoded.height,
 				hasAlpha: encoded.hasAlpha,
 			},
-			durationsMs,
+			durationsMs: buildDurationsMs(
+				opts.pipelineKind,
+				fetchMs,
+				decodeMs,
+				resizeMs,
+				encodeMs,
+			),
 			memory: {
 				peakRssBytes: memory.peakRssBytes,
 				peakHeapUsedBytes: memory.peakHeapUsedBytes,
@@ -497,6 +686,7 @@ export async function runPipeline<Decoded, Resized>(
 			ladder: null,
 			unsupported: null,
 			error: null,
+			instance,
 		};
 	} catch (err) {
 		const memory = sampler.stop();
@@ -506,7 +696,14 @@ export async function runPipeline<Decoded, Resized>(
 			fixture: opts.fixtureKey,
 			input,
 			output: null,
-			durationsMs,
+			durationsMs: {
+				fetch: fetchMs,
+				total: null,
+				decode: null,
+				resize: null,
+				encode: null,
+				phaseSplitUnavailable: null,
+			},
 			memory: {
 				peakRssBytes: memory.peakRssBytes,
 				peakHeapUsedBytes: memory.peakHeapUsedBytes,
@@ -516,8 +713,18 @@ export async function runPipeline<Decoded, Resized>(
 			ladder: null,
 			unsupported: null,
 			error: toErrorInfo(err),
+			instance,
 		};
 	} finally {
+		if (!opts.ladder) {
+			// A resize that short-circuited to the same reference as decoded
+			// (Photon skips reallocating when the target dims already match)
+			// must not be freed twice as if they were distinct handles;
+			// safeDispose's catch-and-swallow would mask that either way, but
+			// the reference check keeps this path from relying on it.
+			if (resized !== decoded) safeDispose(opts.disposeResized, resized);
+			safeDispose(opts.disposeDecoded, decoded);
+		}
 		// In case any early return above did not already stop it (defensive —
 		// calling stop() twice is harmless, clearInterval is idempotent).
 		sampler.stop();
@@ -530,45 +737,63 @@ async function runLadder<Decoded, Resized>(
 	ctx: {
 		input: RunReport["input"];
 		inputAnimated: boolean | null;
-		durationsMs: RunReport["durationsMs"];
+		fetchMs: number | null;
+		decodeMs: number;
 		sampler: { stop: () => PeakMemory };
+		instance: InstanceInfo;
 	},
 ): Promise<RunReport> {
 	const trials: LadderTrial[] = [];
 	let chosenEncoded: EncodedOutput | null = null;
 	let chosenRung: LadderRung | null = null;
 
-	for (const rung of LADDER) {
-		const rungStart = performance.now();
-		try {
-			const resized = await opts.resize(decoded, rung.longEdge);
-			const encoded = await opts.encode(resized, opts.format, rung.quality);
-			const durationMs = performance.now() - rungStart;
-			const underOneMb = encoded.bytes.byteLength < ONE_MB;
-			trials.push({
-				longEdge: rung.longEdge,
-				quality: rung.quality,
-				outputBytes: encoded.bytes.byteLength,
-				underOneMb,
-				durationMs,
-				error: null,
-			});
-			chosenEncoded = encoded;
-			chosenRung = rung;
-			if (underOneMb) break;
-		} catch (err) {
-			trials.push({
-				longEdge: rung.longEdge,
-				quality: rung.quality,
-				outputBytes: null,
-				underOneMb: false,
-				durationMs: performance.now() - rungStart,
-				error: toErrorInfo(err),
-			});
+	try {
+		for (const rung of LADDER) {
+			const rungStart = performance.now();
+			let resized: Resized | undefined;
+			try {
+				resized = await opts.resize(decoded, rung.longEdge);
+				const encoded = await opts.encode(resized, opts.format, rung.quality);
+				const durationMs = performance.now() - rungStart;
+				const underOneMb = encoded.bytes.byteLength < ONE_MB;
+				trials.push({
+					longEdge: rung.longEdge,
+					quality: rung.quality,
+					outputBytes: encoded.bytes.byteLength,
+					underOneMb,
+					durationMs,
+					error: null,
+				});
+				chosenEncoded = encoded;
+				chosenRung = rung;
+				if (underOneMb) break;
+			} catch (err) {
+				trials.push({
+					longEdge: rung.longEdge,
+					quality: rung.quality,
+					outputBytes: null,
+					underOneMb: false,
+					durationMs: performance.now() - rungStart,
+					error: toErrorInfo(err),
+				});
+			} finally {
+				// Each rung's resized intermediate is freed as soon as its trial
+				// is recorded — up to 15 rungs must not each leak a fresh
+				// resized image (Findings 1 and 3). `encode()` has already
+				// copied whatever bytes it needed out of `resized` by this
+				// point, even for the rung ultimately chosen as the result.
+				if (resized !== decoded) safeDispose(opts.disposeResized, resized);
+			}
 		}
+	} finally {
+		// The decoded source has to survive every rung, so it's freed once,
+		// here, after the last one — never mid-loop.
+		safeDispose(opts.disposeDecoded, decoded);
 	}
 
 	const memory = ctx.sampler.stop();
+	const totalMs =
+		ctx.decodeMs + trials.reduce((sum, t) => sum + (t.durationMs ?? 0), 0);
 	return {
 		encoder: opts.encoder,
 		encoderVersion: opts.encoderVersion,
@@ -584,7 +809,20 @@ async function runLadder<Decoded, Resized>(
 						hasAlpha: chosenEncoded.hasAlpha,
 					}
 				: null,
-		durationsMs: ctx.durationsMs,
+		durationsMs: {
+			fetch: ctx.fetchMs,
+			total: totalMs,
+			// Eager: the single decode call before the ladder loop is real.
+			// Lazy: same fiction as the non-ladder path — null it out.
+			// Either way resize/encode stay null here (structural, not a
+			// laziness artifact): their real durations live per-rung in
+			// `ladder[].durationMs` instead of being aggregated at this level.
+			decode: opts.pipelineKind === "eager" ? ctx.decodeMs : null,
+			resize: null,
+			encode: null,
+			phaseSplitUnavailable:
+				opts.pipelineKind === "lazy" ? { reason: LAZY_PIPELINE_REASON } : null,
+		},
 		memory: {
 			peakRssBytes: memory.peakRssBytes,
 			peakHeapUsedBytes: memory.peakHeapUsedBytes,
@@ -602,5 +840,6 @@ async function runLadder<Decoded, Resized>(
 		error: trials.every((t) => t.error)
 			? trials[trials.length - 1].error
 			: null,
+		instance: ctx.instance,
 	};
 }

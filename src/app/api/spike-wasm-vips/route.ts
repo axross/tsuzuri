@@ -10,10 +10,13 @@
 
 import Vips from "wasm-vips";
 import {
+	concurrentMeasurementRejectedBody,
 	type EncodedOutput,
 	type FormatKey,
 	parseSpikeParams,
+	releaseMeasurementLock,
 	runPipeline,
+	tryAcquireMeasurementLock,
 } from "../spike-encode-shared/measure";
 
 export const runtime = "nodejs";
@@ -66,6 +69,18 @@ async function resize(decoded: Decoded, longEdge: number): Promise<VipsImage> {
 	});
 }
 
+/**
+ * `Image` extends `EmbindClassHandle`, the standard Emscripten
+ * manual-disposal pattern: `.delete()` frees the underlying WASM handle, and
+ * a `FinalizationRegistry` fallback exists but runs only if/when V8 happens
+ * to GC the wrapper — not deterministically, and unlikely mid-ladder
+ * (Finding 3). `.isDeleted()` guards a double-dispose without relying on
+ * `.delete()` throwing.
+ */
+function disposeVipsImage(image: VipsImage): void {
+	if (!image.isDeleted()) image.delete();
+}
+
 const SUFFIX_BY_FORMAT: Record<FormatKey, string> = {
 	webp: ".webp",
 	avif: ".avif",
@@ -101,20 +116,35 @@ export async function GET(request: Request): Promise<Response> {
 	}
 	const { params } = parsed;
 
-	const report = await runPipeline({
-		encoder: ENCODER,
-		encoderVersion: ENCODER_VERSION,
-		fixtureKey: params.fixtureKey,
-		format: params.format,
-		longEdge: params.longEdge,
-		quality: params.quality,
-		ladder: params.ladder,
-		decode,
-		isInputAnimated,
-		resize,
-		encode,
-	});
+	if (!tryAcquireMeasurementLock()) {
+		return Response.json(concurrentMeasurementRejectedBody(), {
+			status: 409,
+		});
+	}
+	try {
+		const report = await runPipeline({
+			encoder: ENCODER,
+			encoderVersion: ENCODER_VERSION,
+			fixtureKey: params.fixtureKey,
+			format: params.format,
+			longEdge: params.longEdge,
+			quality: params.quality,
+			ladder: params.ladder,
+			// wasm-vips is libvips: decode/resize only build a pipeline
+			// description, and .writeToBuffer() is what actually runs decode,
+			// resize, and encode (Finding 2).
+			pipelineKind: "lazy",
+			decode,
+			isInputAnimated,
+			resize,
+			encode,
+			disposeDecoded: (decoded) => disposeVipsImage(decoded.image),
+			disposeResized: disposeVipsImage,
+		});
 
-	// Always 200: a failing encoder still produces a data point, in `error`.
-	return Response.json(report);
+		// Always 200: a failing encoder still produces a data point, in `error`.
+		return Response.json(report);
+	} finally {
+		releaseMeasurementLock();
+	}
 }

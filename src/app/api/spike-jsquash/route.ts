@@ -34,11 +34,14 @@ import resizeImageData from "@jsquash/resize";
 import { FIXTURES } from "../spike-encode-shared/fixtures";
 import {
 	computeResizedDimensions,
+	concurrentMeasurementRejectedBody,
 	detectAlphaInRgba,
 	type EncodedOutput,
 	type FormatKey,
 	parseSpikeParams,
+	releaseMeasurementLock,
 	runPipeline,
+	tryAcquireMeasurementLock,
 	unsupportedReport,
 } from "../spike-encode-shared/measure";
 
@@ -133,22 +136,35 @@ export async function GET(request: Request): Promise<Response> {
 		);
 	}
 
-	const report = await runPipeline({
-		encoder: ENCODER,
-		encoderVersion: ENCODER_VERSION,
-		fixtureKey: params.fixtureKey,
-		format: params.format,
-		longEdge: params.longEdge,
-		quality: params.quality,
-		ladder: params.ladder,
-		decode: (bytes) => decodeByMime(bytes, fixture.mime),
-		// The only animated fixture (GIF) was already excluded above, since
-		// jSquash cannot decode it at all.
-		isInputAnimated: () => false,
-		resize,
-		encode,
-	});
+	if (!tryAcquireMeasurementLock()) {
+		return Response.json(concurrentMeasurementRejectedBody(), {
+			status: 409,
+		});
+	}
+	try {
+		const report = await runPipeline({
+			encoder: ENCODER,
+			encoderVersion: ENCODER_VERSION,
+			fixtureKey: params.fixtureKey,
+			format: params.format,
+			longEdge: params.longEdge,
+			quality: params.quality,
+			ladder: params.ladder,
+			// @jsquash/* decodes and resizes eagerly into a plain ImageData, so
+			// decode/resize/encode are real, separately-measurable phases
+			// (Finding 2) — unlike sharp/wasm-vips.
+			pipelineKind: "eager",
+			decode: (bytes) => decodeByMime(bytes, fixture.mime),
+			// The only animated fixture (GIF) was already excluded above, since
+			// jSquash cannot decode it at all.
+			isInputAnimated: () => false,
+			resize,
+			encode,
+		});
 
-	// Always 200: a failing encoder still produces a data point, in `error`.
-	return Response.json(report);
+		// Always 200: a failing encoder still produces a data point, in `error`.
+		return Response.json(report);
+	} finally {
+		releaseMeasurementLock();
+	}
 }

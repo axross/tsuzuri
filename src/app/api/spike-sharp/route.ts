@@ -10,10 +10,13 @@
 
 import sharp, { type Metadata, type Sharp } from "sharp";
 import {
+	concurrentMeasurementRejectedBody,
 	type EncodedOutput,
 	type FormatKey,
 	parseSpikeParams,
+	releaseMeasurementLock,
 	runPipeline,
+	tryAcquireMeasurementLock,
 } from "../spike-encode-shared/measure";
 
 export const runtime = "nodejs";
@@ -89,20 +92,35 @@ export async function GET(request: Request): Promise<Response> {
 	}
 	const { params } = parsed;
 
-	const report = await runPipeline({
-		encoder: ENCODER,
-		encoderVersion: ENCODER_VERSION,
-		fixtureKey: params.fixtureKey,
-		format: params.format,
-		longEdge: params.longEdge,
-		quality: params.quality,
-		ladder: params.ladder,
-		decode,
-		isInputAnimated,
-		resize,
-		encode,
-	});
+	if (!tryAcquireMeasurementLock()) {
+		return Response.json(concurrentMeasurementRejectedBody(), {
+			status: 409,
+		});
+	}
+	try {
+		const report = await runPipeline({
+			encoder: ENCODER,
+			encoderVersion: ENCODER_VERSION,
+			fixtureKey: params.fixtureKey,
+			format: params.format,
+			longEdge: params.longEdge,
+			quality: params.quality,
+			ladder: params.ladder,
+			// sharp is libvips: decode/resize only build a pipeline
+			// description, and .toBuffer() is what actually runs decode,
+			// resize, and encode (Finding 2). No dispose hooks: sharp's own
+			// GC-managed buffers need no explicit disposal (Findings 1/3 are
+			// about Photon and wasm-vips, not sharp).
+			pipelineKind: "lazy",
+			decode,
+			isInputAnimated,
+			resize,
+			encode,
+		});
 
-	// Always 200: a failing encoder still produces a data point, in `error`.
-	return Response.json(report);
+		// Always 200: a failing encoder still produces a data point, in `error`.
+		return Response.json(report);
+	} finally {
+		releaseMeasurementLock();
+	}
 }
