@@ -1,0 +1,17 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "tsuzuri",
+	// `worker.ts`, not `.open-next/worker.js` directly: it wraps the OpenNext
+	// handler in `@sentry/cloudflare`'s `withSentry`. See the file itself.
+	"main": "worker.ts",
+	// 2025-08-16 or later, per Sentry's own "Next.js on Cloudflare" guide: it
+	// is when `https.request` — which the SDK's transport uses — reached the
+	// Workers runtime, which is a later floor than OpenNext's own.
+	"compatibility_date": "2025-08-16",
+	// Required by both @opennextjs/cloudflare and @sentry/cloudflare.
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	}
+}

@@ -29,5 +29,9 @@
 		".next/types/**/*.ts",
 		".next/dev/types/**/*.ts"
 	],
-	"exclude": ["node_modules", ".next"]
+	// `worker.ts` imports `.open-next/worker.js`, which does not exist until
+	// the OpenNext build has run — after `next build`'s own type-check, which
+	// this `tsconfig.json` governs. Both are excluded so that check does not
+	// fail on a file the OpenNext build produces later in the same pipeline.
+	"exclude": ["node_modules", ".next", ".open-next", "worker.ts"]
 }

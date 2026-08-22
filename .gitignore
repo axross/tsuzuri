@@ -11,6 +11,10 @@ node_modules
 .next
 *.tsbuildinfo
 
+# OpenNext / Wrangler build output and local state
+.open-next
+.wrangler
+
 # Test artifacts
 coverage
 /test-results
