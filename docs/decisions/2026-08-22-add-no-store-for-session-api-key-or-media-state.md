@@ -306,23 +306,35 @@ repository remain sufficient on its own — an author can read their own key
 list, and nothing outside their account is needed to verify against it.
 
 **Reading it, and the width of the window.** A verifier list is read through
-two cache tiers: a shared tier the platform provides, and a very short-lived
-in-process tier inside each isolate or Function instance that bounds the
-worst case when the shared tier has not caught up. Revoking runs inside this
+two cache tiers: a shared tier the platform provides, and an in-process tier
+inside each isolate or Function instance. Revoking runs inside this
 application's own handler, so it commits the deletion *and* invalidates the
 shared entry in the same operation rather than waiting for the webhook — a
-request served by the same location is rejected immediately. Elsewhere the
-delay is bounded by the in-process tier's TTL, because how promptly an
-invalidation reaches another location is platform-specific and, on both
-candidate platforms, either unverified or documented as slow. The `push`
-webhook covers the other path, an author editing the file by hand, and that
-same TTL is the floor under both.
+request served by the same location is rejected immediately.
+
+**What bounds the delay elsewhere is both tiers' TTLs, not an
+invalidation.** This is worth stating carefully, because the obvious
+formulation is wrong: the in-process TTL alone bounds nothing, since an
+instance whose entry expires re-reads the shared tier, which may still be
+serving the pre-revocation list if the invalidation has not reached it. How
+promptly an invalidation travels is platform-specific and, on both candidate
+platforms, either unverified or documented as slow — so the design must not
+rest on it. **Both tiers therefore carry short TTLs of their own, and the
+worst case is their sum.** Invalidation on revoke makes the common case much
+faster than that bound; it is not what the bound is made of. The `push`
+webhook covers the other path, an author editing the file by hand, and the
+same sum is the ceiling under it.
+
+Keeping the bound short costs GitHub reads, and that is the trade to size
+when issue #32 is implemented: the shared tier's TTL is what decides how
+often a blog's verifier list is re-read, against the installation quota.
 
 | | Vercel | Cloudflare Workers |
 | --- | --- | --- |
 | Shared cache tier | Runtime Cache, tagged per blog | Cache API, per data centre |
-| Invalidation on revoke | tag expiry; cross-region propagation unverified | per data centre only; other locations wait out the TTL |
+| Invalidation on revoke | tag expiry, local for certain; cross-region propagation unverified | local to one data centre; nothing propagates |
 | Per-instance tier | in-process, short TTL | in-isolate, short TTL |
+| Worst-case staleness | both TTLs summed, never the invalidation | the same |
 
 Workers KV is the obvious shared tier on Cloudflare and is **not** used, for
 the reason the session section gives: a revocation that takes "up to 60
@@ -650,9 +662,13 @@ Recorded as unverified rather than supplied from memory:
 - **Whether Durable Objects are available without a paid Workers plan.** The
   page read does not say. Nothing here depends on it, since Durable Objects
   are rejected on shape.
-- **The unit behind Vercel Global Config's Pro prices.** Its pricing table
-  gives "$3.00" for reads and "$5.00" for writes with no unit stated on the
-  page. Nothing depends on it, since Global Config is excluded.
+- **Vercel Global Config's Pro prices.** Deliberately not recorded. Two
+  independent reads of that page during this change's review disagreed about
+  what its pricing table states and whether it labels a unit at all, which
+  suggests the table renders differently to different readers. Nothing here
+  depends on the figure, since Global Config is excluded on its store size
+  and its write propagation, so the disagreement was left unadjudicated
+  rather than settled by picking one reading.
 - **Whether the Blob included allowances the superseded record quoted are
   the Pro ones.** That record recorded the same gap; nothing here depends on
   it.
