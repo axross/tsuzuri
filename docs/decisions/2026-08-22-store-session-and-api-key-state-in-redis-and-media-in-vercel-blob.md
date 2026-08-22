@@ -409,14 +409,14 @@ The following figures were not stated in the vendor documentation read on
 that mirrors it, both claim this application keeps no persistence layer of
 its own — that everything outside the linked repository is a derived cache
 rebuildable from it. Both claims become false the moment this decision's
-stores exist. Media is a
-rebuild, as shown above, so it does not break the claim on its own — but the
-API-key verifier's scopes are genuine data loss if its store is lost, not
-something the linked repository can rebuild, and session state sits outside
-the linked repository's authority entirely. Both documents need a carve-out
-naming session and API-key state as the exception to that no-persistence
-claim. Writing that carve-out is out of scope for this record, per its
-plan's non-goals; it is left to whichever change implements this decision.
+stores exist. Media is a rebuild, as shown above, so it does not break the
+claim on its own — but the API-key verifier's scopes are genuine data loss
+if its store is lost, not something the linked repository can rebuild, and
+session state sits outside the linked repository's authority entirely. Both
+documents need a carve-out naming session and API-key state as the exception
+to that no-persistence claim. Writing that carve-out is out of scope for
+this record, per its plan's non-goals; it is left to whichever change
+implements this decision.
 
 `docs/conventions/security.md` § "Session Cookies Are This Application's, Not
 GitHub's" is not invalidated — see Session state above — so no rewrite is
