@@ -82,10 +82,13 @@ minting a fresh token per chunk (the measured run's own per-chunk token mint
 cost 0.17–0.33 s, paid thirteen times) or holding one token across a window
 an hour-long expiry can outlast.
 
-With chunks in the store, an abandoned upload is reclaimed by the store's own
-TTL: nothing about it ever reached the user's repository, so there is nothing
-there to clean up. That is the direct contrast to what the spike measured for
-the Git-blob alternative: sending seven of thirteen chunks (28 MiB) and then
+With chunks in the store, an abandoned upload is left to the store's own TTL,
+and nothing about it ever reaches the user's repository, so there is nothing
+there to clean up. That reclamation is a property of the store this record
+adopts rather than something this spike observed: the joined run landed its
+chunks as Git blobs, so no chunk's TTL behaviour in Redis was exercised — see
+the residual risk at the end of this record. What the spike did observe is
+the alternative it rules out: sending seven of thirteen chunks (28 MiB) and then
 stopping left all seven blobs still reachable by SHA afterward, at their full
 4,194,304 bytes each, with no call the application can make that removes
 them.
@@ -150,9 +153,16 @@ residue: deleting a ref only makes its objects unreachable, which is already
 what an abandoned chunk-blob is, so the branch buys nothing a plain blob did
 not already have. The Function instance's own `/tmp` was rejected because it
 does not survive across invocations, Fluid compute's instance reuse
-notwithstanding. Next.js's own cache primitives were rejected because they
-are a read cache, not a binary write-through store, and chunks are exactly
-the kind of write this mechanism needs held. Client-side re-encoding before
+notwithstanding; reopening it would need the platform to guarantee that every
+request of one upload reaches the same instance and that its filesystem
+persists between them, which instance reuse is not — it is an optimization
+the platform may or may not apply, not an affinity a mechanism can be built
+on. Next.js's own cache primitives were rejected because they are a read
+cache, not a binary write-through store, and chunks are exactly the kind of
+write this mechanism needs held; reopening one would need a primitive that
+accepts a binary write from a route handler and reads it back durably, which
+`2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`
+examined at length and found none of them to be. Client-side re-encoding before
 upload — which would put the whole source under the single-request budget in
 one step and remove the need for any intermediate store — was considered and
 not taken.
