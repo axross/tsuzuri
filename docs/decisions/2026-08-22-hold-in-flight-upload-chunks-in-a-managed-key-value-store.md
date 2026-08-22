@@ -14,9 +14,11 @@ committed blob, a mid-upload abandonment, and both a buffered and a streamed
 download — on this pull request's preview deployment, against a throwaway
 scratch repository, `axross/tsuzuri-spike-scratch`, deleted once the
 measurement was reported. This record is written from that measurement. The
-maintainer chose a managed key-value store, added through the Vercel
+maintainer chose a managed key-value store, reached through the Vercel
 Marketplace, as the place an in-flight upload's chunks live, over the
-alternatives weighed below.
+alternatives weighed below — reusing the store #3 had already chosen for
+other project state, as the next section details, rather than adding a new
+one.
 
 Vercel's own current documentation
 ([vercel.com/docs/functions/limitations](https://vercel.com/docs/functions/limitations),
@@ -46,19 +48,28 @@ front of the preview URL to a vercel.com login page, and returned that page's
 200 — indistinguishable from a successful upload unless redirects are
 refused.
 
-An in-flight upload's chunks are held in a managed key-value store reached
-through the Vercel Marketplace, keyed by an upload id the client generates
-and keeps, and reclaimed by a time-to-live rather than by an explicit delete
-call the application must remember to make. #3, the state-placement spike,
-adopts this as a fixed constraint for its own kinds of state rather than
-reopening the choice.
+`2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`
+— #3's own record, and it landed before this one — already chose Redis via
+the Vercel Marketplace, specifically Upstash, as where this project's
+session and API-key state live. An in-flight upload's chunk belongs in that
+same store, under its own key namespace, keyed by an upload id the client
+generates and keeps, and reclaimed by a time-to-live rather than by an
+explicit delete call the application must remember to make — the same
+pattern that record already used to add the API-key verifier alongside the
+session record rather than open a second store for it. The two decisions
+agree by reusing one store rather than by one deferring to the other: #3
+fixed which key-value store this project's state lives in before this
+record needed one, and what this record adds is a third kind of key in it,
+not a second store.
 
 The chunk phase touches only the store: a chunk lands in the key-value store
 keyed by upload id and index, and nothing about receiving it calls GitHub.
 Completion — reached once the client reports every chunk sent — reassembles
 the chunks from the store, verifies the reassembled bytes against the
-declared hash, re-encodes the result (issue #5's own decision, not this
-one's, and not reopened here), mints one installation token, and then makes
+declared hash, re-encodes the result — `sharp` to WebP at a 2000px long edge
+and quality 80,
+`2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`'s
+own decision, not reopened here — mints one installation token, and then makes
 the sequence of GitHub writes that token authorizes. Because the chunk phase
 never touches GitHub, that mint happens once, immediately before the writes
 that use it, which is exactly what `docs/conventions/security.md` already
@@ -91,7 +102,13 @@ its suggested remedy — pushing from a local clone — unavailable to a
 serverless function. A bisect of the creation path specifically, at 1 MiB
 resolution, found the actual ceiling undocumented and far below the read
 limit: 39 MiB accepted, 40 MiB refused. A 50 MB source can never be committed
-as one blob, whatever carries its bytes there.
+as one blob, whatever carries its bytes there — which is what makes
+`2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`'s
+choice load-bearing rather than a style preference. That record's own
+measured outputs — 77 KB to 684 KB across the six inputs it tried, WebP at a
+2000px long edge and quality 80 — land far inside the 39 MiB ceiling this
+record measured, and every one of them exists before this record's
+completion step ever asks GitHub to accept a blob.
 
 The download direction needs no chunking. Buffered responses (sent with an
 explicit `Content-Length`) up to 64 MiB and streamed responses (no
@@ -138,29 +155,52 @@ are a read cache, not a binary write-through store, and chunks are exactly
 the kind of write this mechanism needs held. Client-side re-encoding before
 upload — which would put the whole source under the single-request budget in
 one step and remove the need for any intermediate store — was considered and
-not taken, because where re-encoding happens is issue #5's decision and this
-record does not reach past it to decide that this spike's mechanism should be
-replaced rather than adopted; if #5 settles on client-side re-encoding, this
-mechanism is the one to reopen. Vercel Blob, in both an intermediate-store
-form and a presigned direct-to-storage form that would have removed the 4.5
-MB problem outright, was excluded by the maintainer at this plan's approval
-gate rather than left unexamined; reopening it is the maintainer's call to
-make again, not a technical finding this record can supply.
+not taken.
+`2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md`,
+decided after this alternative was weighed, forecloses it rather than merely
+leaving it open: the project's actual re-encoder is `sharp`, a native binary
+that record's own build trace puts at 46.74 MB, which runs on the Vercel
+Function and was never a candidate for a browser. Reopening this alternative
+would need re-encoding to move off `sharp` entirely, not a preference this
+record could grant on its own.
 
-This decision adds a vendor and a recurring bill, and it sits in real tension
-with this project's own stated premise — carried in `README.md` and
-`AGENTS.md` — that it adds no persistence layer of its own and that the
-linked repository is the only source of truth. That tension is accepted here
-rather than smoothed over. What stays true despite it: the store holds only
-chunks of an upload still in flight, never a post or a media object once
-committed, so losing the store fails an upload in progress rather than losing
-anything the linked repository already has. `README.md` and `AGENTS.md` will
-need revisiting once the store is actually added — their descriptions of this
-project's stack and its no-persistence-layer premise both currently describe
-a project with no such vendor — but neither is wrong yet, because the store
-does not exist yet: this change decides what #3's implementation is to add,
-it does not add it. That revisit belongs to the change that actually wires
-the store in.
+Vercel Blob, in both an intermediate-store form and a presigned
+direct-to-storage form that would have removed the 4.5 MB problem outright,
+was excluded by the maintainer at this plan's approval gate. That instruction
+stands, and this record does not reopen it. What has changed since is worth
+stating plainly rather than left to sit quietly on a reason that no longer
+holds: the exclusion rested on Blob adding a storage vendor this project did
+not otherwise carry, and that reason has dissolved.
+`2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`
+has since adopted private Vercel Blob for the re-encoded media cache, so
+Blob is already in this project's stack, and routing chunks through it too
+would add no vendor either. Reopening the exclusion is still the
+maintainer's call, not a technical finding this record can supply — but it
+is now a call about which of two already-adopted stores fits an in-flight
+chunk best, not about whether to accept a new one.
+
+This decision adds no vendor.
+`2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`
+already added Upstash, reached through the Vercel Marketplace, as this
+project's Redis relationship, for session and API-key state — see that
+record's own Total vendor count. An in-flight upload's chunk is a third kind
+of key in that same store, at marginal additional request and storage volume
+against a plan the project is already on, not a second vendor relationship
+or a second bill. That record found no concrete free-tier limit or
+per-request or per-GB price published for Upstash where it looked, and
+recorded the gap rather than a figure; this record does not supply one
+either.
+
+That record's own "What this invalidates" section already names the
+carve-out `README.md` and `AGENTS.md` owe their no-persistence claim, and
+assigns writing it to whichever change implements the decision — a carve-out
+that session and API-key state force on their own, because losing either is
+genuine data loss rather than a rebuild. This record's own addition to that
+store does not widen what is owed: losing a chunk still in flight fails the
+upload in progress, the same category that record already used for the
+media cache, which it found did not, on its own, break the no-persistence
+claim. Writing the carve-out stays out of scope here, exactly as it already
+was there, and this decision adds nothing to what that record already owes.
 
 Resumability is costed here rather than built. With chunks keyed by upload id
 and index in a store the server can query, the client can keep the upload id
@@ -171,13 +211,18 @@ partial chunk list, and a chunk lifetime in the store long enough to outlast
 a single request, which a store already reclaiming by TTL can offer without
 redesign — none of which this record builds.
 
-This record fixes the kind of store, not the vendor: which managed
-key-value product to add through the Vercel Marketplace, its pricing, its
-actual TTL and read/write latency, and its own per-operation limits against
-this project's expected upload volume were not measured and are left to the
-change that adds it. The joined measurement above exercised Git blobs as the
-per-chunk landing point rather than a key-value store, so its transport and
-completion timings describe that path, not the one this decision adopts; a
-chunk write into the eventual store is expected to be faster than the Git
-blob write the measured per-chunk time was dominated by (0.7–2.1 s per
-chunk), but that expectation was not measured and is not evidence.
+This record no longer leaves the store's vendor open.
+`2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`
+already chose Upstash Redis, reached through the Vercel Marketplace, and an
+in-flight upload's chunk lands in that same instance rather than in a store
+this project has yet to provision. What that record could not establish, and
+what this one inherits rather than re-measures, is Upstash's concrete
+free-tier limits and its per-request or per-GB price — both recorded there
+as unverified, not supplied from memory here either. A chunk's own write and
+read latency and its TTL behaviour in that store were not measured in this
+record's own joined run, for the reason already given above: that run landed
+chunks as individual Git blobs rather than in Redis, because the same run
+also had to produce the abandonment and blob-ceiling observations. A chunk
+write into Redis is expected to be faster than the Git blob write the
+measured per-chunk time was dominated by (0.7–2.1 s per chunk), but that
+expectation was not measured and is not evidence.
