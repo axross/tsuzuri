@@ -1,0 +1,101 @@
+name: Production Deployment
+
+# Deploys the default branch's head to the production Cloudflare Worker,
+# cutting a release with semantic-release first. Dispatched by hand — never
+# on a push, never on a published release — which is the maintainer's own
+# decision (issue #79), so nothing reaches production without an operator
+# choosing to.
+#
+# Only the DEPLOY half is preflight-gated. The release half needs nothing
+# beyond the job's own GITHUB_TOKEN, which every Actions job already carries,
+# so it always runs — a dispatch whose commits warrant no release still
+# deploys, and a dispatch with the Cloudflare secrets absent still cuts the
+# release, skips the deploy, and concludes green. See
+# docs/operations/preview-deployment.md for what "armed" means here; this
+# workflow keeps the same step-level shape.
+
+on:
+  workflow_dispatch:
+
+# Only one production deployment at a time; queue rather than cancel, so a
+# second dispatch never lands mid-release of the first.
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+# Least privilege for what semantic-release actually does in this
+# configuration: create the Git tag, create the GitHub Release, and push the
+# version-bump commit (package.json, CHANGELOG.md) back to the default
+# branch. `successComment`/`failComment` are off in release.config.js
+# precisely so this workflow needs no issues/pull-requests permission on top
+# of that. The deploy steps need no GitHub permission at all — only the
+# Cloudflare secrets below.
+permissions:
+  contents: write
+
+jobs:
+  release-and-deploy:
+    name: Release and Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Preflight
+        id: preflight
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare is not configured for this repository — the release below will still be cut, but the production deploy is skipped. See docs/operations/preview-deployment.md."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # semantic-release reads the full tag and commit history to resolve
+          # the previous version and the commits since it; the default
+          # shallow checkout has neither.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dependency Installation
+        run: npm install
+
+      # Always runs, regardless of the preflight above: this needs only the
+      # job's own GITHUB_TOKEN. Exits without releasing when nothing since
+      # the last tag warrants one — the deploy step below runs either way,
+      # because deploying is what the operator dispatched this workflow to
+      # do. release.config.js carries the one custom rule (breaking -> minor)
+      # that keeps every release inside 0.x.
+      - name: Release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
+
+      # SENTRY_AUTH_TOKEN gates only the client source-map upload inside this
+      # build (see next.config.ts); its absence degrades the build rather
+      # than blocking it, so it is not part of the preflight guard above.
+      - name: Build
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: npm run build:worker
+
+      # wrangler.jsonc's own `name` ("tsuzuri") is used as-is: unlike the
+      # preview pipeline, production is one fixed Worker, so there is nothing
+      # to template per run.
+      - name: Deploy
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run deploy:worker
