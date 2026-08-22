@@ -37,24 +37,30 @@ The largest output is the 12-megapixel phone photograph at 684 KB, not the
 phone photograph of a detailed street scene does not. Sizing the policy against
 the biggest *file* would have been the wrong instinct.
 
-The worst peak observed across every run, including the AVIF attempts below,
-was 779 MB. Against the memory a function on this plan gets by default that
-leaves well over half unused, and the plan's maximum is twice the default
-again, so there is a second lever before this becomes a constraint. Duration is
-not close to a limit either: the slowest WebP run was 1.6 s against a ceiling
-measured in minutes.
+The worst peak `sharp` reached in any run was 779 MB, on the 54 MB photograph
+encoded to AVIF; the AVIF table below carries the rest. Against the memory a
+function on this plan gets by default that leaves well over half unused, and
+the plan's maximum is twice the default again, so there is a second lever
+before this becomes a constraint. Duration is not close to a limit either: the
+slowest WebP run was 1.6 s against a ceiling measured in minutes. One rejected
+candidate ran hotter than `sharp` ever did — see `@cf-wasm/photon` below — so
+779 MB is the chosen encoder's ceiling, not the spike's.
 
 ## Why WebP and Not AVIF
 
 The convention this project already carries names WebP or AVIF as
 interchangeable. They are not, on this workload:
 
-| Input | WebP | AVIF |
-| ----- | ---- | ---- |
-| Phone photograph | 684 KB in 0.9 s | 838 KB in 29.6 s |
-| 54 MB photograph | 226 KB in 1.6 s | 297 KB in 15.0 s |
-| Screenshot | 348 KB in 0.4 s | 317 KB in 10.8 s |
-| Logo with transparency | 77 KB in 0.6 s | 64 KB in 4.5 s |
+| Input | WebP | AVIF | AVIF peak RSS |
+| ----- | ---- | ---- | ------------- |
+| Phone photograph | 684 KB in 0.9 s | 838 KB in 29.6 s | 684 MB |
+| 54 MB photograph | 226 KB in 1.6 s | 297 KB in 15.0 s | 779 MB |
+| Screenshot | 348 KB in 0.4 s | 317 KB in 10.8 s | 640 MB |
+| Logo with transparency | 77 KB in 0.6 s | 64 KB in 4.5 s | 571 MB |
+| Small photograph | 30 KB in 0.2 s | 43 KB in 4.8 s | 514 MB |
+
+The WebP peaks are in the table above; AVIF costs more memory as well as more
+time, on every input.
 
 At the same nominal quality AVIF is between 7× and 33× slower and, on the two
 photographs that matter most, larger. It wins slightly on the screenshot and
@@ -62,8 +68,8 @@ the logo — the two inputs already far under the target, where winning is worth
 nothing. A quality number does not mean the same thing to both encoders, so a
 tuned AVIF would land differently; what this rules out is adopting AVIF at the
 same setting and expecting it to be free. JPEG was measured too, for a floor:
-778 KB on the phone photograph, worse than WebP on size while being no more
-compatible than WebP now is.
+778 KB on the phone photograph in 0.5 s at a 635 MB peak — worse than WebP on
+size while being no more compatible than WebP now is.
 
 ## Why Not the Other Encoders
 
@@ -88,8 +94,13 @@ configuration", not a "never". It also has no GIF decoder at all.
 the four, but its WebP encoder takes no quality argument and emits something
 close to lossless: the 44.7 KB photograph came back at 369 KB, and the
 12-megapixel one at 4.02 MB — four times the target rather than under it. It
-also exposes no AVIF encoder. Speed is not worth an encoder that cannot hit the
-size the whole design depends on.
+also exposes no AVIF encoder. Its peaks ran higher than `sharp`'s throughout —
+666 MB on the 44.7 KB photograph, 768 MB on the screenshot, the transparent
+logo and the GIF alike, 833 MB on the 54 MB photograph, and 869 MB on the
+12-megapixel one, which is the highest figure this spike recorded from any
+encoder. It dropped the GIF's animation too, returning a single 300×200 frame
+where `sharp` returned all fifteen. Speed is not worth an encoder that cannot
+hit the size the whole design depends on.
 
 `@squoosh/lib` was excluded without measurement; its most recent release is
 from January 2023.

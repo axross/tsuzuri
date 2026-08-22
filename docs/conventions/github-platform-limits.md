@@ -63,7 +63,9 @@ screenshot, and a logo with transparency — one pass, no fallback needed. Do
 quality it was 7–33× slower and larger on both photographs. This is a
 condition of the project's own justification for storing media in the
 repository at all, not a nice-to-have: see
-[the decision to store media in the linked repository](../decisions/2026-08-21-store-media-in-the-linked-repository-rather-than-in-object-storage.md).
+[the decision to store media in the linked repository](../decisions/2026-08-21-store-media-in-the-linked-repository-rather-than-in-object-storage.md),
+and [the decision on the encoder and the output policy](../decisions/2026-08-22-re-encode-uploads-with-sharp-to-webp-at-a-2000px-long-edge.md)
+for where these figures came from and why AVIF is not a drop-in alternative.
 
 ## Always Check `truncated`
 
