@@ -9,89 +9,26 @@ what GitHub already stores or build something richer on top of it. We chose the
 former: the comment model this product offers is GitHub's, and we add nothing to
 it that GitHub would not round-trip.
 
-The reason is the same in every section below. A comment can be written on
-GitHub directly, without ever passing through this application, so anything we
-layer on top has to survive text an author typed into GitHub's own interface.
-A structure only we understand is a structure that is wrong whenever someone
-uses the platform we chose to build on.
+One fact drove most of what follows. A comment can be written on GitHub
+directly, without ever passing through this application, so anything we layer on
+top has to survive text an author typed into GitHub's own interface. A structure
+only we understand is a structure that is wrong whenever someone uses the
+platform we chose to build on.
 
-Every figure below was confirmed against the live GraphQL API on 2026-08-22,
-except where a paragraph says otherwise. Identifiers are elided from the quoted
-responses; the probes ran against a throwaway repository.
+## Replies stop at two levels because we did not fake a third
 
-## Replies are two levels deep
+The platform caps a discussion at top-level comments and one layer of replies;
+the platform limits document states that ceiling, how it was measured, and what
+a write past it returns.
 
-A discussion holds top-level comments, and each top-level comment holds replies.
-A reply holds nothing. Posting the third level fails:
-
-```
-"type": "UNPROCESSABLE",
-"message": "Parent comment is already in a thread, cannot reply to it"
-```
-
-The read shape agrees. `Discussion.comments` returns only the top-level
-comments — the reply posted in the same probe is absent from that connection —
-and each of them carries its own `replies` connection. A reply's own node
-carries no further replies beneath it.
-
-GitHub does not publish this ceiling. Its documentation describes `replyToId`
-only as "The node ID of the discussion comment to reply to. If absent, the
-created comment will be a top-level comment," and states no maximum depth
-anywhere we could find (read 2026-08-22). The ceiling is therefore observed
-rather than documented, and it can move without notice — a change that depends
-on it MUST re-probe rather than trust this record.
-
-We capped the product at those two levels rather than representing a deeper
-tree. Representing one is possible: a reply's body could carry a marker naming
-its real parent, and this application could rebuild the tree on read. It was
-rejected because it puts a parsing contract into text that readers type by hand
-and authors edit on GitHub. The first comment written through GitHub's own
+We took the cap as the product's own rather than representing a deeper tree on
+top of it. Representing one is possible: a reply's body could carry a marker
+naming its real parent, and this application could rebuild the tree on read. It
+was rejected because it puts a parsing contract into text that readers type by
+hand and authors edit on GitHub. The first comment written through GitHub's own
 interface would carry no marker, and the tree would be wrong from then on. A
 representation that only holds while everyone uses our API is not a
 representation of a repository we do not control.
-
-## Which token performs which write
-
-| Write | Token |
-| ----- | ----- |
-| Creating a **comment thread** that does not exist yet | the **installation access token** |
-| Posting a top-level **reader comment** | that reader's **user access token** |
-| Posting a reply | that reader's **user access token** |
-
-The first row is the one write the security conventions allow on the
-application's own identity, so that the first reader to comment does not become
-the person who opened the discussion. The other two carry the reader's own name
-and count against the reader's own quota.
-
-The companion app must therefore hold the **Discussions** repository permission
-at write level. That is a registration-time decision, which is why this spike
-ran before comments are built.
-
-All three mutations were confirmed to succeed. What was **not** exercised is
-which identity performed them: every probe ran with a fine-grained personal
-access token belonging to the repository's own owner. Neither an installation
-access token nor a reader who is not a collaborator was tested. The token
-column above is what the permission model says, not what this run observed, and
-a change that turns it on MUST verify it against the real identities.
-
-## What a blog backed by a private repository reports
-
-A user access token reaches only what the person and the app can both reach.
-That is how the token's scope is defined, so no arrangement of the flow changes
-it, and a reader who is not a collaborator on a private repository cannot post
-to its discussions.
-
-The operative condition is *access*, not privacy. A discussion was created and
-commented on inside a private repository during this probe, using a token that
-reached it — privacy alone stops nothing. What stops a reader is that they are
-not the one holding that access.
-
-So a blog backed by a private repository reports comments as **unavailable**,
-and says that the repository's visibility is why. It MUST NOT show an empty
-thread, which reads as "nobody has commented", and MUST NOT surface an
-authorization error, which reads as a fault. This holds whether the product
-supports private repositories or not: while it does not, the case never arises;
-when it does, it is a per-blog difference in what the blog can offer.
 
 ## Serve the Markdown, and own the sanitization that comes with it
 

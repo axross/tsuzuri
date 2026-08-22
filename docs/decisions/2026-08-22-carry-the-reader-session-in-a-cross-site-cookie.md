@@ -85,12 +85,18 @@ stranger. Neither saving was worth the narrowing.
 
 ## What the session's lifetime is
 
-The session record holds the tokens and the cookie carries an opaque identifier,
-so the cookie's lifetime is bounded by the token behind it. A GitHub App user
-access token "expires after 8 hours" by default, and the refresh token's
-lifetime "will always be `15897600` (6 months)". The session cookie therefore
-lives at most eight hours before the refresh token extends it, and the session
-as a whole cannot outlive six months without the reader authorizing again.
+The security conventions already bound a session cookie by the token behind it.
+What that comes to here is GitHub's own numbers: a GitHub App user access token
+"expires after 8 hours" by default, and its refresh token's lifetime "will
+always be `15897600` (6 months)" (both read from GitHub's documentation on
+2026-08-22). So a reader's cookie lives at most eight hours before the refresh
+token extends it, and the session as a whole cannot outlive six months without
+the reader authorizing again.
+
+Those two figures are what made the cross-site cookie tolerable at all. Eight
+hours is short enough that a session which fails to stick — the third-party
+cookie case below — costs a reader one more sign-in rather than locking them
+out, and six months is short enough that a stale grant expires on its own.
 
 ## What was traded away
 

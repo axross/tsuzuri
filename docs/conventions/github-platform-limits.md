@@ -149,12 +149,11 @@ those two levels, and MUST NOT assume the ceiling is permanent: GitHub publishes
 no maximum depth, so this figure was measured rather than read, and re-measuring
 is the only way to know it still holds.
 
-Why the product stops at those two levels rather than representing a deeper
-tree, why *access* rather than visibility is the operative condition on a
-private repository, and what was rejected in reaching either are in
+Why the product takes that ceiling as its own rather than representing a deeper
+tree on top of it — and what representing one would have cost — is in
 [the decision to cap comments at the shape GitHub Discussions stores](../decisions/2026-08-22-cap-comments-at-the-shape-github-discussions-stores.md).
-The rules in this section hold without it; the record is where the alternatives
-that were considered and dropped are kept.
+The rules in this section hold without it; the record is where the alternative
+that was considered and dropped is kept.
 
 The read shape follows the same two levels. `Discussion.comments` returns **only
 top-level comments** — a reply is absent from it — and each node carries its own
