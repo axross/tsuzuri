@@ -81,7 +81,9 @@ rises to roughly **$715 a month**, dominated by Fast Data Transfer past its
 included 1 TB
 ([iad1 regional pricing](https://vercel.com/docs/pricing/regional-pricing/iad1),
 read 2026-08-22). Cloudflare's rises to roughly **$18**, dominated by the
-Worker request overage past its included 10,000,000. Vercel's dominant line
+Worker request overage past its included 10,000,000
+([Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/),
+read 2026-08-22). Vercel's dominant line
 items scale with bytes and requests; Cloudflare's mostly do not, because
 Cloudflare's own pricing page states it plainly: **"There are no additional
 charges for data transfer (egress) or throughput (bandwidth)."**
