@@ -211,8 +211,25 @@ export async function POST(request: Request) {
 		},
 	);
 	if (!finalBlobResponse.ok) {
+		// The upstream message is what says *why* a blob of this size was
+		// refused, which is the measurement's result rather than noise. GitHub
+		// error bodies for this endpoint carry no credential; the token is only
+		// ever sent, never echoed.
+		const detail = (await finalBlobResponse.text()).slice(0, 500);
 		return Response.json(
-			{ error: `Failed to create final blob: ${finalBlobResponse.status}` },
+			{
+				error: `Failed to create final blob: ${finalBlobResponse.status}`,
+				detail,
+				bytes: combined.byteLength,
+				base64Bytes: Buffer.byteLength(combined.toString("base64")),
+				sha256Match,
+				concurrency,
+				ms: {
+					tokenMint,
+					fetchBlobs,
+					createFinalBlob: performance.now() - createFinalBlobStart,
+				},
+			},
 			{ status: 502 },
 		);
 	}
