@@ -4,9 +4,10 @@ status: accepted
 
 # Move to Cloudflare Workers and keep Next.js
 
-We moved hosting to Cloudflare Workers and kept Next.js, retained through
-`@opennextjs/cloudflare`. This supersedes
-[the decision to host on Vercel and split media transfer](./2026-08-21-host-on-vercel-and-split-media-transfer.md),
+We decided to move hosting to Cloudflare Workers and to keep Next.js,
+retained through `@opennextjs/cloudflare`. This supersedes the decision to
+host on Vercel and split media transfer,
+`2026-08-21-host-on-vercel-and-split-media-transfer.md`,
 which invited its own replacement on exactly this ground: "If the chunked
 transfer proves more expensive to build or operate than the framework
 convenience is worth, that is the trade this decision made, and a later
@@ -63,8 +64,9 @@ Worker request overage past its included 10,000,000. Vercel's dominant line
 items scale with bytes and requests; Cloudflare's mostly do not, because
 Cloudflare's own pricing page states it plainly: **"There are no additional
 charges for data transfer (egress) or throughput (bandwidth)."** That is
-not incidental to our design. [The decision to serve media from our own
-cache rather than GitHub's raw host](./2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md)
+not incidental to our design. The decision to serve media from our own cache
+rather than GitHub's raw host,
+`2026-08-21-serve-media-from-our-own-cache-rather-than-githubs-raw-host.md`,
 requires every media byte to leave from this application's own origin, so
 egress is not a cost we could shrink by delegating it elsewhere — it is a
 structural cost of the architecture, and it is exactly the line item
@@ -247,14 +249,13 @@ None of the following is false yet — Vercel remains the platform until the
 migration is executed — so this record names what it will invalidate
 without editing any of it:
 
-- [`docs/conventions/github-platform-limits.md`](../conventions/github-platform-limits.md)
+- `docs/conventions/github-platform-limits.md`
   § "Stay Inside the Hosting Platform's Body Limit," which states Vercel's
   4.5 MB request-body cap and the chunking it requires.
 - `README.md`'s tech-stack table, at least its Hosting row, and its Logging
   row too if issue #69 concludes against Pino.
-- [`docs/operations/preview-deployment.md`](../operations/preview-deployment.md),
-  whose whole pipeline is built around Vercel's per-pull-request preview
-  mechanism.
+- `docs/operations/preview-deployment.md`, whose whole pipeline is built
+  around Vercel's per-pull-request preview mechanism.
 - Issue #39, "Chunked media upload and server-side reassembly," becomes
   obsolete once the migration executes. Amending or closing it is not this
   record's work.
@@ -265,9 +266,9 @@ This record does not decide, and deliberately leaves to other work:
 
 - **Session, API-key, and media-cache placement.** Issue #67 owns this, and
   its constraint has to be re-derived against Cloudflare's own primitives
-  rather than Vercel's. This record does not supersede
-  [the decision to store session and API-key state in Redis and media in
-  Vercel Blob](./2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md);
+  rather than Vercel's. This record does not supersede the decision to store
+  session and API-key state in Redis and media in Vercel Blob,
+  `2026-08-22-store-session-and-api-key-state-in-redis-and-media-in-vercel-blob.md`;
   a `superseded_by` field names exactly one replacement, and #67 is already
   assigned that one.
 - **The image re-encoding method.** Issue #40 owns this, under issue #67's
