@@ -21,7 +21,8 @@
 			"biome.json",
 			"worker.ts",
 			"open-next.config.ts",
-			"wrangler.jsonc"
+			"wrangler.jsonc",
+			"release.config.js"
 		]
 	},
 	"formatter": {
