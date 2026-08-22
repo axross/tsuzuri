@@ -121,10 +121,11 @@ establish none of it.
 
 Whether a host builds with Turbopack, accepts Node.js middleware, carries
 `instrumentation.ts` into what it deploys, and still reports errors once it does
-are the first four questions to settle, ahead of pricing or ergonomics. Three of
+are the first four questions to settle, ahead of pricing or ergonomics. Two of
 them mislead when they fail. The middleware constraint names a remedy that costs
 more than it looks — switching to edge middleware, which Next.js 16 offers only
 under the filename it deprecated. The instrumentation one names a missing file,
 and supplying it produces a build that passes and a deployment that does not
-run. The error-reporting one does not fail at all, which is worse: it is the
-only one of the four a green build and a working deployment will not surface.
+run. The fourth is not a misleading failure but the absence of one: error
+reporting does not fail at all, which is worse, because it is the only one of
+the four a green build and a working deployment will not surface.
