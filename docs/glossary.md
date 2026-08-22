@@ -13,15 +13,12 @@ repository**, opening with **front matter**.
 **Front matter** — the metadata block at the head of a **post** file, carrying
 what the article itself is not: its title, its publication date, its tags.
 
-**Body node** — one root-level unit of a **post**'s body, such as a heading,
-a paragraph, a list, or a table, addressed by a **node address** rather than
-edited by rewriting the whole body.
+**Body node** — one root-level unit of a **post**'s body, such as a heading, a
+paragraph, a list, or a table. It is what a **node address** names.
 
 **Node address** — the identifier an agent uses to name one **body node** for
 a targeted edit: the node's position among its siblings and its type, plus a
 digest of the node and a digest of the whole **post** file it was read from.
-It is honoured only against the exact revision it was read from and is refused
-otherwise.
 
 **Media object** — an image or other binary a **post** embeds, kept in the
 **linked repository** at a **content-addressed path**.
