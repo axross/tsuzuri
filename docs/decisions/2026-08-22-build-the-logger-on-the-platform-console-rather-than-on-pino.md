@@ -12,18 +12,18 @@ JSON line per record through the platform console**:
 strength of what #69 measured against a deployed Worker, not on an assumption
 about which platform this project ends up hosted on.
 
-**Why now, and why platform-neutral.** This project is hosted on Vercel, and
-that is a decided question rather than an open one:
-`2026-08-21-host-on-vercel-and-split-media-transfer.md` is accepted and no
-record supersedes it. What is open is narrower — #67, #68, #69 and #70 are
-spikes measuring what a move to Cloudflare Workers would cost, and #69 is the
-one that produced the measurements below. This decision presupposes neither
-outcome. `console[level](JSON.stringify(record))` is not a Workers-specific
+**Why now, and why platform-neutral.** This decision is independent of where
+this project is hosted, and deliberately so.
+`console[level](JSON.stringify(record))` is not a Workers-specific
 construction; it yields JSON on Node's own console and on `workerd` alike, so
-the logger it describes is correct on the host this project runs on today and
-survives unchanged if that host is ever revisited. Adopting it now costs
-nothing against the standing hosting decision and removes a dependency that
-would have to be unwound if the spikes lead anywhere.
+the logger it describes is correct on either platform and unaffected by a move
+between them. The independence matters because the hosting question is under
+active revision — #71 carries it, and #67, #68, #69 and #70 measure what a
+move to Cloudflare Workers would cost, #69 being the spike that produced the
+measurements below. A logger decision that waited on that outcome would either
+delay this one or bind it to a platform it does not need. Taking it now costs
+nothing under either outcome, and removes a dependency that would otherwise
+have to be unwound.
 
 **What #69 measured, on a deployed paid-plan Worker.** Two independent
 failures, not one. Under Wrangler's default resolution, pino 10.3.1 resolves
