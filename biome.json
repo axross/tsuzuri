@@ -13,7 +13,6 @@
 			"messages/**",
 			"next.config.ts",
 			"next-env.d.ts",
-			"instrumentation.ts",
 			"instrumentation-client.ts",
 			"vitest.config.ts",
 			"playwright.config.ts",
