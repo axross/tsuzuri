@@ -6,7 +6,7 @@ status: accepted
 
 This application holds three kinds of state that do not fit the no-persistence
 premise `AGENTS.md` states in its Project Overview section and `README.md`
-states in its opening paragraph: the session record behind a login or a
+states in its second paragraph: the session record behind a login or a
 reader comment, the per-blog API keys issue #32 needs to be revocable, and
 the re-encoded media cache that stands between readers and GitHub's raw
 host. None of the three had a home. We picked one for each from Vercel's and Next.js's own current
@@ -404,7 +404,7 @@ The following figures were not stated in the vendor documentation read on
 
 ## What this invalidates
 
-`README.md`'s opening paragraph, and `AGENTS.md`'s Project Overview section
+`README.md`'s second paragraph, and `AGENTS.md`'s Project Overview section
 that mirrors it, both claim this application keeps no persistence layer of
 its own — that everything outside the linked repository is a derived cache
 rebuildable from it. Both claims become false the moment this decision's
