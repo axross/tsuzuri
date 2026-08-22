@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded_by: 2026-08-22-move-to-cloudflare-workers-and-keep-next-js.md
 ---
 
 # Host on Vercel and split media transfer
