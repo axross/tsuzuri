@@ -4,7 +4,8 @@ import { createSign, timingSafeEqual } from "node:crypto";
  * Throwaway measurement scaffolding for issue #6. This file is deleted
  * before the pull request leaves draft — see the decision record it feeds.
  *
- * It reads `COMPANION_GITHUB_APP_ID`, `COMPANION_GITHUB_APP_PRIVATE_KEY`, `SPIKE_SCRATCH_REPO`,
+ * It reads the App id and private key (COMPANION_GITHUB_APP_ID or
+ * GITHUB_APP_ID, and the matching private key), plus `SPIKE_SCRATCH_REPO`
  * and `SPIKE_SHARED_SECRET` straight from `process.env` rather than through
  * `src/shared/lib/env.ts`. That wiring is issue #16's own work; pulling it
  * forward here is a non-goal this file deliberately does not take on.
@@ -103,11 +104,18 @@ export interface MintedToken {
  * than reused across a lengthy sequence.
  */
 export async function mintInstallationToken(): Promise<MintedToken> {
-	const appId = process.env.COMPANION_GITHUB_APP_ID;
-	const rawPrivateKey = process.env.COMPANION_GITHUB_APP_PRIVATE_KEY;
+	// Accepts the companion-app names and the unqualified ones alike. The two
+	// sets were configured in different places while this spike was being set
+	// up, and a name mismatch here fails at measurement time with nothing but a
+	// 502 to explain it. Issue #16 picks one when it wires these for real.
+	const appId =
+		process.env.COMPANION_GITHUB_APP_ID ?? process.env.GITHUB_APP_ID;
+	const rawPrivateKey =
+		process.env.COMPANION_GITHUB_APP_PRIVATE_KEY ??
+		process.env.GITHUB_APP_PRIVATE_KEY;
 	if (!appId || !rawPrivateKey) {
 		throw new Error(
-			"COMPANION_GITHUB_APP_ID or COMPANION_GITHUB_APP_PRIVATE_KEY is not configured",
+			"No App id/private key configured: set COMPANION_GITHUB_APP_ID and COMPANION_GITHUB_APP_PRIVATE_KEY, or GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY",
 		);
 	}
 	const privateKey = normalizePrivateKey(rawPrivateKey);
