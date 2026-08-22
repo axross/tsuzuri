@@ -105,13 +105,19 @@ Two things, neither of them cost:
 **The chunked-media-transfer obligation disappears.** The superseded record
 accepted "a genuine, non-trivial obligation" as the price of choosing
 Vercel: media above Vercel Functions' 4.5 MB request-body cap has to be
-split by the client, reassembled server-side, and committed as one blob,
-in both directions. Issue #39 exists only to build that mechanism. Workers'
+split by the client, reassembled server-side, and committed as one blob.
+That record also claimed "the same split applies on the way out," and the
+spike for issue #6 measured otherwise on 2026-08-22 — buffered responses
+were delivered in full to 64 MiB and streamed responses to 200 MiB, and no
+response-side rejection was reproducible at any size tried. The obligation
+was therefore always the upload leg alone, and the superseded record
+overstated it. Issue #39 exists only to build that mechanism. Workers'
 request-body cap depends on the Cloudflare account plan rather than the
 Workers plan and is 100 MB on both the Free and Pro tiers
 ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/),
 read 2026-08-22) — more than twenty times Vercel's ceiling, and comfortably
-past any image this project re-encodes before committing it. The obligation
+past any image this project re-encodes before committing it. The upload leg
+is precisely what that gap addresses, so what remained of the obligation
 does not shrink; it goes away.
 
 **Headroom.** The five-times comparison above is the shape of this
@@ -373,7 +379,14 @@ way — they were measured, but on a Vercel preview deployment rather than on
 Workers, so they establish what those encoders cost rather than what they
 would cost on the platform this record moves to. That is enough to rule them
 out against a 128 MB ceiling and not enough to size a replacement.
-Cloudflare's own documentation says nothing, in either direction,
+The response-side measurement this record leans on to retire the
+download-direction claim is likewise another session's rather than this
+one's: issue #6's spike ran it on 2026-08-22 against a Vercel preview
+deployment, and what it establishes is that no response-side rejection was
+reproducible up to 64 MiB buffered and 200 MiB streamed — not that no
+response ceiling exists above those sizes. That is enough to retire an
+obligation nobody can demonstrate and not enough to promise an unbounded
+response. Cloudflare's own documentation says nothing, in either direction,
 about support for native Node addons; a workerd maintainer wrote in a
 GitHub discussion on 2024-06-14 that "Node.js native add-ons are likely
 never to be supported by workers," and an N-API support request has been
