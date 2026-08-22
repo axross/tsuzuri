@@ -17,9 +17,9 @@ platform we chose to build on.
 
 ## Replies stop at two levels because we did not fake a third
 
-The platform caps a discussion at top-level comments and one layer of replies;
-the platform limits document states that ceiling, how it was measured, and what
-a write past it returns.
+The platform imposes a ceiling on how deep a reply can sit. The platform limits
+document states what it is, how it was measured, and what a write past it
+returns.
 
 We took the cap as the product's own rather than representing a deeper tree on
 top of it. Representing one is possible: a reply's body could carry a marker
@@ -42,12 +42,12 @@ decisions, GitHub's class names, and GitHub's image proxy along with them. That
 is a rendering this product does not control and cannot restyle, which
 contradicts the whole reason it serves data rather than pages.
 
-The price is the whole of the sanitization burden. GitHub sanitizes only what it
-renders, never what it stores, so the representation we chose is the one that
-arrives exactly as a stranger typed it. The read-path neutralization the
-comment-subset work specifies is therefore not a second line of defence behind
-GitHub's — it is the only line, and nothing upstream of it does the job. That
-was the cost accepted, not an oversight to be discovered later.
+The price is the whole of the sanitization burden: of the two, we chose the
+representation GitHub does not clean, which the platform limits document states
+in full. The read-path neutralization the comment-subset work specifies is
+therefore not a second line of defence behind GitHub's — it is the only line,
+and nothing upstream of it does the job. That was the cost accepted, not an
+oversight to be discovered later.
 
 Serving GitHub's rendering instead was rejected on the styling loss above.
 Serving both, and letting each consumer pick, was rejected too: it doubles the
