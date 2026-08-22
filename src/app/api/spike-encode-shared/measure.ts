@@ -171,9 +171,14 @@ export function startPeakMemorySampler(): { stop: () => PeakMemory } {
 }
 
 /**
- * Vercel's Node runtime sets this the same way AWS Lambda does, since
- * Vercel Functions run on Lambda underneath. `null` when absent (e.g. running
- * locally via `next dev`) rather than a guessed number.
+ * Vercel Functions run on Lambda underneath, so this is the variable that
+ * would carry the configured memory — but Vercel's own limits page, read on
+ * 2026-08-22, lists `AWS_LAMBDA_FUNCTION_MEMORY_SIZE` among the variables
+ * that are NOT accessible once fluid compute is enabled, and fluid compute is
+ * on by default for new projects. Expect `null` on a deployed function as
+ * well as locally, and take the configured memory from the project's own
+ * settings rather than from the runtime. Returning `null` rather than a
+ * guessed number is the point.
  */
 export function readConfiguredMemoryMb(): number | null {
 	const raw = process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
