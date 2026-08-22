@@ -117,11 +117,11 @@ outside our control and will change without notice.
 
 We accepted that because the alternative that avoids it costs the feature its
 shape. The commenting reader is a minority of readers, reading needs no session
-at all, and a failure here is visible and recoverable rather than silent: the
-API must answer a write from a reader whose session did not survive with an
-error the consumer site can distinguish from a rejected comment, so the author's
-page can tell the reader to sign in again rather than reporting that their
-comment was refused.
+at all, and a failure here is visible and recoverable rather than silent — the
+security conventions already require the distinguishable-error handling that
+makes it so. A loss we can hand back to the reader as "sign in again" is a
+different kind of loss from one that corrupts or drops their comment, and only
+the second would have been disqualifying.
 
 Two alternatives were rejected.
 
