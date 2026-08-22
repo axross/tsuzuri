@@ -52,11 +52,12 @@ because Cloudflare's own extraction builds the record, not because pino
 wrote one. Second, fields the current logger emits are simply gone on that
 build — `time`, `pid`, `hostname`, and pino's numeric `level` convention
 (30/40/50) all disappear, replaced by whatever Workers Logs supplies on its
-own. Third, and most concretely, the resolution that decides which of these
-two loggers you get is implicit and one environment variable from silent
-breakage: OpenNext's own troubleshooting page *recommends* setting
-`WRANGLER_BUILD_CONDITIONS=""` and `WRANGLER_BUILD_PLATFORM="node"` to fix
-unrelated packages that mis-resolve
+own. Third, and most concretely — though measured against a plain Worker
+rather than an OpenNext build of this application, per the gap recorded
+below — the resolution that decides which of these two loggers you get is
+implicit and one environment variable from silent breakage: OpenNext's own
+troubleshooting page *recommends* setting `WRANGLER_BUILD_CONDITIONS=""` and
+`WRANGLER_BUILD_PLATFORM="node"` to fix unrelated packages that mis-resolve
 ([OpenNext Cloudflare troubleshooting](https://opennext.js.org/cloudflare/troubleshooting),
 read 2026-08-22).
 Anyone who flips those for some other dependency's sake converts every log
@@ -132,6 +133,11 @@ from #69, so a decision to route logs off-platform cannot rest on it.
 **What is still unverified**, named so a later reader does not mistake
 inference for measurement:
 
+- **Which entry an OpenNext build of this application resolves.** #69 measured
+  a plain Worker, not this project's own build, and named this its largest
+  gap: OpenNext may set build conditions the plain path does not. The third
+  argument above turns on which of pino's two entries the real build picks, so
+  that argument rests on a measurement never taken against the real build.
 - **LogTape's behaviour in production Workers Logs.** Everything measured
   above ran locally against `workerd` through `wrangler dev`; nothing was
   deployed, so LogTape's output was never checked against a live Workers Logs
