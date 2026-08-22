@@ -131,9 +131,22 @@ seconds apart. See
 ## Exclude Our Own Commits From the Webhook
 
 A commit this application writes fires the same `push` webhook it listens to.
-Handling that event by writing again is an infinite loop. Webhook handling
-MUST filter out commits authored by the application's own bot identity before
-acting on them.
+Handling that event by writing again is an infinite loop. The author's
+identity cannot be the filter: a save commit is authored as the user rather
+than as the application's own bot identity, so nothing in its author field
+distinguishes a save this application wrote from one the same author pushed
+by hand from their laptop. The committer is no help either, being the same
+GitHub web identity every web-UI edit already carries. See
+[the decision to author save commits as the user](../decisions/2026-08-22-author-save-commits-as-the-user.md).
+
+Webhook handling MUST instead filter on **the commit OID the write itself
+returned**: `createCommitOnBranch` returns `commit.oid`, and the Git Data API
+returns the created commit's SHA. Match that OID against the SHAs the `push`
+event delivers, and skip a commit whose SHA is one of ours. Keeping a
+short-lived record of recently written OIDs is cache-like in the sense this
+project already accepts elsewhere: it is rebuildable, and losing it before a
+webhook arrives costs at most one redundant, idempotent cache refresh rather
+than an infinite loop.
 
 ## Never Link `raw.githubusercontent.com`
 
