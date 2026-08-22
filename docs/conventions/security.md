@@ -43,10 +43,50 @@ become the person who opened the discussion.
 ## Session Cookies Are This Application's, Not GitHub's
 
 This application issues its own session cookie after an OAuth exchange; GitHub
-issues none to us. That cookie MUST be `HttpOnly`, `Secure`, and
-`SameSite=Lax`, and its lifetime MUST NOT exceed the underlying token's. The
-session record — not the browser — holds the GitHub token; the cookie carries
-an opaque identifier and nothing else.
+issues none to us. Every such cookie MUST be `HttpOnly` and `Secure`, and its
+lifetime MUST NOT exceed the underlying token's. The session record — not the
+browser — holds the GitHub token; the cookie carries an opaque identifier and
+nothing else.
+
+`SameSite` is the one attribute that differs by who the session belongs to,
+because the two sessions are used from different origins.
+
+An **author** signs in on this application's own origin and uses it there, so
+their cookie MUST be `SameSite=Lax`.
+
+A **reader** signs in through this application but comments from the author's
+site, which is an origin we do not control. A `SameSite=Lax` cookie is sent
+cross-site only for a request that is both a top-level navigation and a safe
+method, and posting a comment is a `POST` issued as a subresource request — so
+under `Lax` the reader's session would never reach the API at all. A reader's
+cookie MUST therefore be `SameSite=None`, which obliges the `Secure` attribute
+that every cookie here already carries.
+
+Two other arrangements would have avoided a cross-site cookie altogether — a
+top-level redirect to this application's own origin for the write, which keeps
+`SameSite=Lax`, and a short-lived bearer token handed to the consumer site —
+and both were rejected. Why, and what the third-party-cookie exposure accepted
+in their place costs, are in
+[the decision to carry the reader session in a cross-site cookie](../decisions/2026-08-22-carry-the-reader-session-in-a-cross-site-cookie.md).
+
+`SameSite=None` withdraws the protection `Lax` was providing against
+cross-site request forgery, so an endpoint that accepts a reader session MUST
+replace it with both of the following, and MUST NOT rely on either alone:
+
+- an allowlist of the blog's registered origin, enforced through CORS;
+- an anti-forgery token required on every write.
+
+The allowlist alone is insufficient. A request simple enough to skip the CORS
+preflight is still delivered to the server, and only its *response* is withheld
+from the caller — so a write with a side effect would already have happened by
+the time the origin check mattered. The anti-forgery token is what actually
+rejects that write.
+
+Making a reader's cookie `SameSite=None` also makes it a third-party cookie,
+which some browsers block or partition by default. A reader whose session does
+not survive that MUST receive an error distinguishable from a rejected comment,
+so the consumer site can prompt them to sign in again rather than reporting
+that their comment was refused.
 
 ## There Is No Lockout Threshold Here, Deliberately
 
