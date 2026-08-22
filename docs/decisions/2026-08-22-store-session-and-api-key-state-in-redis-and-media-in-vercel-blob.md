@@ -5,11 +5,11 @@ status: accepted
 # Store session and API-key state in Redis and media in Vercel Blob
 
 This application holds three kinds of state that do not fit the no-persistence
-premise `README.md` and `AGENTS.md` both state in their Project Overview
-sections: the session record behind a login or a reader comment, the
-per-blog API keys issue #32 needs to be revocable, and the re-encoded media
-cache that stands between readers and GitHub's raw host. None of the three had
-a home. We picked one for each from Vercel's and Next.js's own current
+premise `AGENTS.md` states in its Project Overview section and `README.md`
+states in its opening paragraph: the session record behind a login or a
+reader comment, the per-blog API keys issue #32 needs to be revocable, and
+the re-encoded media cache that stands between readers and GitHub's raw
+host. None of the three had a home. We picked one for each from Vercel's and Next.js's own current
 documentation, read on 2026-08-22, rather than from memory or from the
 research memo the project started from.
 
@@ -272,9 +272,11 @@ already rejected once, for a different vendor's raw host.
   against price.
 - **The Next.js Data Cache**, for the reasons already established above:
   Vercel's own guidance sends "Complete HTTP responses (images, fonts, etc.)"
-  to the CDN cache instead, the 2 MB item cap leaves no margin over the 1 MB
-  re-encode target, and the cache is shared with — and evictable by — every
-  other project on the team.
+  to the CDN cache instead, and the cache is shared with — and evictable by —
+  every other project on the team. The 2 MB item cap is not among the
+  reasons: a re-encoded object targeted under 1 MB fits it with room to
+  spare, and saying otherwise would overstate the case against a candidate
+  the two grounds above already rule out.
 - **The ISR cache**, for the reason already established above: it does not
   carry over from one deployment to the next, so every deployment would pay
   the re-encode cost again for every image, on the first request after each
@@ -403,9 +405,10 @@ The following figures were not stated in the vendor documentation read on
 
 ## What this invalidates
 
-`README.md`'s Project Overview, and `AGENTS.md`'s mirror of it, both claim
-this application keeps no persistence layer of its own — that everything
-outside the linked repository is a derived cache rebuildable from it. Both
+`README.md`'s opening paragraph, and `AGENTS.md`'s Project Overview section
+that mirrors it, both claim this application keeps no persistence layer of
+its own — that everything outside the linked repository is a derived cache
+rebuildable from it. Both
 claims become false the moment this decision's stores exist. Media is a
 rebuild, as shown above, so it does not break the claim on its own — but the
 API-key verifier's scopes are genuine data loss if its store is lost, not
