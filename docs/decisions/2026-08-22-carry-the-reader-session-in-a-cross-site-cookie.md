@@ -28,13 +28,19 @@ Origin **A** is the author's site. Origin **B** is this application.
 1. The reader activates "sign in to comment" on a page served by **A**.
 2. **A** performs a top-level navigation to **B**, carrying the blog's
    identifier and the URL to return to. **B** rejects a return URL that is not
-   on that blog's registered origin, mints a random `state`, and stores it
-   against the pending authorization.
+   on that blog's registered origin, then holds it **server-side** against the
+   pending authorization alongside a freshly minted random `state`. Holding it
+   server-side is forced rather than chosen: step 3 gives GitHub nowhere to
+   carry it.
 3. **B** redirects to `https://github.com/login/oauth/authorize`, with
    `client_id`, `redirect_uri`, `state`, and a PKCE `code_challenge` and
-   `code_challenge_method`. GitHub requires `redirect_uri` to "be a match to
-   one of the URLs you provided as a 'Callback URL' in your app's settings",
-   so this leg cannot be redirected to an attacker's origin.
+   `code_challenge_method`. Of `redirect_uri`, GitHub's own parameter
+   description says: "This must be a match to one of the URLs you provided as
+   a "Callback URL" in your app's settings and can't contain any additional
+   parameters." Both halves matter here. The first is why this leg cannot be
+   redirected to an attacker's origin. The second is why the reader's return
+   URL cannot ride along on `redirect_uri` and has to be the server-side
+   record step 2 keeps.
 4. The reader authorizes on **github.com**, under their own account. They are
    not required to be a collaborator on the repository.
 5. GitHub redirects to **B**'s registered callback with `code` and `state`.
