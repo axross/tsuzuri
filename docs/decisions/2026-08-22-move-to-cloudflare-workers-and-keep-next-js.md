@@ -76,7 +76,7 @@ Vercel.
 
 ## What the decision actually rests on
 
-Three things, none of them cost:
+Two things, neither of them cost:
 
 **The chunked-media-transfer obligation disappears.** The superseded record
 accepted "a genuine, non-trivial obligation" as the price of choosing
@@ -95,10 +95,19 @@ argument: roughly 3x at the settled scale, roughly 40x at five times it.
 A traffic spike that would materially strain the Vercel budget barely moves
 Cloudflare's.
 
-**One fewer vendor.** Session and API-key state, which currently look to
-Upstash Redis, can live in Cloudflare's own primitives instead of a fourth
-paid relationship alongside GitHub, Vercel, and Upstash. Working out which
-Cloudflare primitive is left to issue #67, below.
+A third ground was claimed while this was being written and does not hold, so
+it is recorded here as rejected rather than quietly dropped. **Shedding a
+vendor is not a reason to prefer Cloudflare.** Session and API-key state
+currently look to Upstash Redis, and moving them into Cloudflare's own
+primitives would end that fourth paid relationship — but issue #67 withdrew
+the vendor latitude on 2026-08-22 independently of any platform question, and
+under its constraint the Vercel-side candidates end it too. An encrypted
+cookie, the Vercel Runtime Cache, and the linked repository all add no vendor.
+Vendor count is therefore **neutral between the two platforms** once #67
+applies; the comparison that made it look like a difference was measuring
+Cloudflare against the superseded storage decision's four vendors rather than
+against Vercel under #67's three. Working out which primitive holds that state
+on either platform is issue #67's, below.
 
 Two premises the comparison rested on were already out of date by the time
 it ran, and the record should say so rather than let stale numbers stand
