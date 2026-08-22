@@ -252,9 +252,12 @@ expire it, and a very short-lived in-process tier inside each Function
 instance that bounds the worst case when a tag expiry has not reached a
 region. Revoking runs inside this application's own Function, so it commits
 the deletion *and* expires the tag in the same operation rather than waiting
-for the webhook — on that path the next request bearing the key is already
-rejected. The `push` webhook covers the other path, an author editing the
-file by hand, and the in-process tier's TTL is the floor under both.
+for the webhook — so a request served by the region that ran the revoke is
+rejected immediately. Elsewhere the delay is bounded by the in-process
+tier's TTL, because whether a tag expiry reaches another region promptly is
+one of the figures this record leaves unverified below. The `push` webhook
+covers the other path, an author editing the file by hand, and that same TTL
+is the floor under both.
 
 **What happens when the signal is lost.** A `push` webhook that never
 arrives leaves a hand-edited revocation in place only until the cached entry
@@ -274,8 +277,17 @@ read 2026-08-22), and a per-request write would exceed it by orders of
 magnitude. It still satisfies what issue #32 wanted the field for — telling
 a live key from a forgotten one. **This is a change to issue #32's
 acceptance criterion**, which asks that "Each key's last use is recorded and
-shown" without qualifying the granularity; amending that issue belongs to
-the change that implements it, not here.
+shown" without qualifying the granularity.
+
+It is the second of two. The maintainer's answer on the revocation window
+reaches issue #32's wording just as directly: that issue asks that "Revoking
+a key causes the next request bearing it to be rejected", and issue #3
+recorded the no-tolerated-window premise as "what issue #32's 'revoke'
+means". The design above rejects a revoked key within a bounded window
+rather than on literally the next request, so that criterion is relaxed to
+"rejected within the cache tiers' bounded window" by the same answer.
+Amending either criterion belongs to the change that implements issue #32,
+not here.
 
 Those commits fire the `push` webhook this application listens to, so they
 are subject to the rule in `docs/conventions/github-platform-limits.md` §
@@ -323,8 +335,8 @@ rather than consuming this one's.
 **What is lost if it is lost: a rebuild, and not this application's data to
 lose.** This is the sharpest change from the superseded record, which called
 API-key loss "data loss, not a rebuild" and concluded on that basis that the
-project's no-persistence claim was broken. Under this placement the verifier list
-lives in the source of truth itself. Losing every cache costs a re-read.
+project's no-persistence claim was broken. Under this placement the verifier
+list lives in the source of truth itself. Losing every cache costs a re-read.
 Losing the repository is the author losing their blog, which is a condition
 this application has never claimed to survive.
 
