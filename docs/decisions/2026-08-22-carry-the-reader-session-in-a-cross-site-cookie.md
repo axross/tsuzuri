@@ -15,11 +15,13 @@ replace what `SameSite=Lax` had been doing — an allowlist of each blog's
 registered origin enforced through CORS, and an anti-forgery token the API
 requires on every write.
 
-`SameSite=Lax` could not stay, because a Lax cookie is sent cross-site only for
-a request that is both a top-level navigation and a safe method. A `fetch()`
-from the author's page to our API is neither: it is a subresource request, and
-posting a comment is a `POST`. Under Lax the reader's session simply would not
-accompany the write, and the API would see every commenting reader as anonymous.
+`SameSite=Lax` could not stay: the security conventions state why a cross-site
+`POST` never carries a `Lax` cookie, which is exactly what posting a comment
+always is. So this was not a choice between two workable attributes. `Lax`
+would have left the API seeing every commenting reader as anonymous, which is
+not a degraded version of the feature but the absence of it — and that is why
+the alternatives weighed below are about avoiding the cross-site request
+altogether rather than about softening it.
 
 ## The flow, end to end
 
