@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded_by: 2026-08-22-add-no-store-for-session-api-key-or-media-state.md
 ---
 
 # Store session and API-key state in Redis and media in Vercel Blob
