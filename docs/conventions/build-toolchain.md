@@ -1,13 +1,14 @@
 # Build Toolchain
 
-What `next build` produces here, and the three constraints that follow from it.
+What `next build` produces here, and the four constraints that follow from it.
 The general practice — Next.js 16's own bundler default, the runtime a proxy
 takes, what standalone output traces — is owned by the installed
 `next-app-development` capability. This document states only this project's own
 answers: which of those general rules this tree has already collided with, what
 each collision cost, and what it forecloses. Every claim was measured against
 `next@16.3.1`, and the adapter cases additionally against
-`@opennextjs/cloudflare@1.20.2`.
+`@opennextjs/cloudflare@1.20.2`, `@sentry/nextjs@10.70.0`, and
+`@sentry/cloudflare@10.70.0`.
 
 ## Webpack Is Not a Fallback Here, Because `@scope` Forecloses It
 
@@ -63,16 +64,68 @@ turns a failing build into a passing one and nothing more: the chunks that file
 imports are not traced either, so every request then fails at runtime with
 `ChunkLoadError: Failed to load chunk … for chunk server/instrumentation.js`.
 
+Supplying those chunks by hand as well does not end it either. The build then
+fails inside the adapter's own bundler, which cannot resolve the hash-suffixed
+names Turbopack gives externalized packages: `Could not resolve
+"require-in-the-middle-<hash>"`. Declaring the packages in
+`serverExternalPackages` relocates that failure rather than removing it — the
+next unresolvable name is `@sentry/nextjs-<hash>`. The remedy has no bottom:
+each piece supplied by hand reveals the next one that was not traced.
+
 A change adopting a host that consumes `.next/standalone` MUST verify
 instrumentation against a running deployment that has served a request, never
 against a build that completed.
 
-## An Alternative Host Must Answer All Three Before Anything Is Costed
+## A Passing Deployment Does Not Mean Error Reporting Still Reports
 
-Whether a host builds with Turbopack, accepts Node.js middleware, and carries
-`instrumentation.ts` into what it deploys are the first three questions to
-settle, ahead of pricing or ergonomics. Two of them mislead when they fail. The
-middleware constraint names a remedy that costs more than it looks — switching
-to edge middleware, which Next.js 16 offers only under the filename it
-deprecated. The instrumentation one names a missing file, and supplying it
-produces a build that passes and a deployment that does not run.
+The constraint above is about getting `instrumentation.ts` into what is
+deployed. This one is about what happens once it is there: under
+`@opennextjs/cloudflare` the file is deployed and never invoked. Next.js's
+`register()` hook does not run, so `Sentry.init` never executes and no client
+exists. A deliberate throw from a route handler on a deployed Worker produced no
+event at all — confirmed against the Sentry project and against a local ingest
+endpoint that captured nothing while accepting a hand-posted envelope.
+
+This is the failure mode worth stating plainly, because it is the one nothing
+announces: an error tracker reporting nothing is indistinguishable from an
+application with no errors. Every other constraint in this document fails loudly
+at build time. This one only fails when someone needs a stack trace and finds
+the project has been blind for however long it has been deployed.
+
+Wrapping the adapter's generated Worker entrypoint in a custom entrypoint that
+uses `@sentry/cloudflare`'s `withSentry` recovers most of it. Measured on a
+deployed Worker: the exception, the console and fetch breadcrumbs, and the
+request context all arrive. The framework's own build-time route-handler
+instrumentation turns out to have been in the bundle the whole time and merely
+to have had nowhere to report; supplying a client at the Worker boundary
+activates it.
+
+What that does not recover is the stack trace. The adapter merges the server
+into one bundle and emits no source map for it, so every frame lands at a
+coordinate in that bundle. Uploading the map Wrangler generates for the custom
+entrypoint does not rescue it: none of the map's sources are this project's
+files, because the deepest thing it can describe is the adapter's
+already-bundled server output. Sentry locates that map, applies it, and reports
+an invalid location for every frame. Client-side errors, by contrast,
+symbolicate all the way to this project's own files and line numbers — so the
+half of the application carrying this project's risk is the half that loses its
+traces.
+
+A change adopting a host adapter MUST verify that a deliberate server-side
+throw produces an event in the error tracker, on a deployed instance, before
+treating error reporting as working. A build that succeeds, a deployment that
+serves requests, and an `instrumentation.ts` present in the bundle together
+establish none of it.
+
+## An Alternative Host Must Answer All Four Before Anything Is Costed
+
+Whether a host builds with Turbopack, accepts Node.js middleware, carries
+`instrumentation.ts` into what it deploys, and still reports errors once it does
+are the first four questions to settle, ahead of pricing or ergonomics. Two of
+them mislead when they fail. The middleware constraint names a remedy that costs
+more than it looks — switching to edge middleware, which Next.js 16 offers only
+under the filename it deprecated. The instrumentation one names a missing file,
+and supplying it produces a build that passes and a deployment that does not
+run. The fourth is not a misleading failure but the absence of one: error
+reporting does not fail at all, which is worse, because it is the only one of
+the four a green build and a working deployment will not surface.
