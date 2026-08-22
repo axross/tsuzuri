@@ -5,10 +5,16 @@ publishes both hard limits that reject a request and soft recommendations that
 degrade a repository's health without ever failing. A change that touches the
 GitHub surface MUST satisfy the rules below.
 
-These figures were established from GitHub's own documentation on 2026-08-20.
-GitHub changes them without notice, so a change that turns on one of these
+Most of these figures were established from GitHub's own documentation on
+2026-08-20. The Discussions section is younger and different in kind: it was
+measured against the live API on 2026-08-22, because GitHub publishes almost
+none of what it states — each section says which of the two it rests on.
+
+GitHub changes any of it without notice, so a change that turns on one of these
 numbers MUST re-check the primary source this document cites for it, listed
-near the end, rather than trusting the number here.
+near the end, rather than trusting the number here. For a figure that was
+measured rather than read, re-checking means measuring again: there is no
+primary source to consult.
 
 ## Never Read GitHub Per Request
 
