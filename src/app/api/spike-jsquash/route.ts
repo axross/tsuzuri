@@ -14,17 +14,23 @@
  * Every other jSquash call here is expected to fail with a structured
  * `error` rather than a result: jSquash's own automatic WASM loader calls
  * `fetch(new URL('*.wasm', import.meta.url))`, and that fails on this stack
- * — verified on 2026-08-22, reproduced identically under both `next dev`
- * and a production `next build && next start` — because Node's `fetch`
- * rejects a `file://` URL with "not implemented... yet". A documented
+ * — reproduced on 2026-08-22 under both `next dev` and a production
+ * `next build && next start`, both local — because Node's `fetch` rejects a
+ * `file://` URL with "not implemented... yet". This is expected to hold on
+ * the deployed Vercel runtime too, pending confirmation there (Finding 6):
+ * Vercel's own build tracing could in principle change how this
+ * `import.meta.url`-relative resolution behaves on the deployed
+ * filesystem, so the decision record should confirm it on the preview
+ * rather than repeat this local result as settled. A documented
  * manual-init workaround (pre-compiling the codec's own `.wasm` file and
  * handing it to that codec's `init()`) does fix this in a plain Node
  * process, but every way tried to locate that `.wasm` file from inside a
  * route at runtime broke under Next's Turbopack server bundle — see the
  * long comment above `EncodedOutput` in `../spike-encode-shared/measure.ts`
  * for what was tried and why this wasn't pursued further. This is itself
- * the accurate result for "does jSquash run in the deployed Vercel Node
- * runtime out of the box": no, and here is exactly why.
+ * the accurate result for "does jSquash run out of the box, reproduced
+ * locally under both a dev and a production Node build" — pending the same
+ * check on the deployed runtime.
  */
 
 import decodeJpeg from "@jsquash/jpeg/decode";

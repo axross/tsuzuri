@@ -333,10 +333,16 @@ export interface EncodedOutput {
  * A candidate whose Emscripten/wasm-bindgen glue calls
  * `fetch(new URL('*.wasm', import.meta.url))` to load its own WASM binary
  * (`@jsquash/*`, confirmed by inspecting its published glue) fails on this
- * stack — verified on 2026-08-22 under both `next dev` and a production
- * `next build && next start` — because Node's `fetch` rejects a `file://`
- * URL with "not implemented... yet", even though the same package works
- * fine in a browser bundle. Each codec also documents a manual-init path
+ * stack — reproduced on 2026-08-22 under both `next dev` and a production
+ * `next build && next start`, both local — because Node's `fetch` rejects a
+ * `file://` URL with "not implemented... yet", even though the same package
+ * works fine in a browser bundle. This is expected to hold on the deployed
+ * Vercel runtime too, pending confirmation there (Finding 6): Vercel's own
+ * build tracing could in principle change how this `import.meta.url`-
+ * relative resolution behaves on the deployed filesystem, so treat "fails
+ * on Vercel" as expected-but-unconfirmed rather than verified until the
+ * decision record checks it on the preview. Each codec also documents a
+ * manual-init path
  * for exactly this situation: hand a pre-compiled `WebAssembly.Module` to
  * its own `init()` instead of letting it fetch. That workaround was tried
  * here and works in a plain Node process (`node -e`, no bundler), but
