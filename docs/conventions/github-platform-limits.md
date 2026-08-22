@@ -192,7 +192,10 @@ and keeps its text.
 Since this project serves Markdown rather than GitHub's HTML, it serves `body`.
 Any path that returns a comment to a consumer MUST therefore sanitize it here.
 There is no upstream sanitization to fall back on, and a change that assumes
-GitHub already cleaned the text is wrong.
+GitHub already cleaned the text is wrong. Serving the source rather than
+GitHub's rendering was a choice, and the sanitization burden was its accepted
+price rather than an oversight; what was weighed is in
+[the decision to cap comments at the shape GitHub Discussions stores](../decisions/2026-08-22-cap-comments-at-the-shape-github-discussions-stores.md).
 
 The restricted subset this product intends to expose to readers — bold,
 italics, and links, and nothing else — behaves like this. All three are stored

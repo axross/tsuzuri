@@ -93,41 +93,28 @@ authorization error, which reads as a fault. This holds whether the product
 supports private repositories or not: while it does not, the case never arises;
 when it does, it is a per-blog difference in what the blog can offer.
 
-## GitHub stores a comment exactly as written and sanitizes only when rendering
+## Serve the Markdown, and own the sanitization that comes with it
 
-A comment carrying raw HTML, dangerous link schemes, and every Markdown
-construct outside the intended subset was posted and read back. Two things came
-out of it.
+GitHub keeps two representations of a comment: the source a reader wrote, and
+GitHub's own rendering of it. We could have served either, and the platform
+limits document records what each one actually contains.
 
-`body` returned **byte-identical** to what was sent — `<script>` tags,
-`javascript:` links, `onerror` attributes and all. GitHub does not sanitize what
-it stores.
+We chose the source. A consumer site renders comments into its own page, in its
+own design, and handing it GitHub's HTML would mean handing it GitHub's markup
+decisions, GitHub's class names, and GitHub's image proxy along with them. That
+is a rendering this product does not control and cannot restyle, which
+contradicts the whole reason it serves data rather than pages.
 
-`bodyHTML` — GitHub's own rendering — is sanitized, and selectively rather than
-wholesale. `<b>` and `<details>` survive as markup. `<script>`, `<iframe>`, and
-`<style>` come back escaped. An `<img>` keeps its tag but loses its `onerror`
-attribute, and is reissued through GitHub's image proxy. An anchor whose href is
-`javascript:`, `data:`, or `vbscript:` loses the anchor entirely, leaving only
-its text.
-
-The subset this product intends to expose — bold, italics, and links — is not
-exempt from either half of that. All three store verbatim; `**bold**` renders as
-`<strong>` and `*italic*` as `<em>` untouched; and a link comes back as
-`<a href="…" rel="nofollow">`, with the `rel` **added** by GitHub. Nothing in
-the subset is rejected, but the link is rewritten, and rewritten only on
-GitHub's side: a consumer reading the stored Markdown sees no `rel` at all and
-must add it itself.
-
-A bare URL is the same asymmetry in the other direction. It stays bare text in
-storage and renders as a link anyway, so validation written against link
-*syntax* does not limit links — a rule about links has to act on what a renderer
-will produce rather than on what the reader typed.
-
-This product serves Markdown rather than GitHub's HTML, so what a consumer
-receives is `body` — the unsanitized one. The read-path neutralization the
+The price is the whole of the sanitization burden. GitHub sanitizes only what it
+renders, never what it stores, so the representation we chose is the one that
+arrives exactly as a stranger typed it. The read-path neutralization the
 comment-subset work specifies is therefore not a second line of defence behind
-GitHub's: it is the **only** sanitization between a stranger's text and a
-consumer's renderer. Nothing upstream of it does the job.
+GitHub's — it is the only line, and nothing upstream of it does the job. That
+was the cost accepted, not an oversight to be discovered later.
+
+Serving GitHub's rendering instead was rejected on the styling loss above.
+Serving both, and letting each consumer pick, was rejected too: it doubles the
+contract and guarantees that some consumer renders the unsanitized one anyway.
 
 ## Moderation belongs to the author's GitHub workflow
 

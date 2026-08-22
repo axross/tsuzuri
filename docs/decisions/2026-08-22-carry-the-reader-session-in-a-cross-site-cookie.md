@@ -69,14 +69,19 @@ The authorization leg is protected by `state`, as step 6 describes, and by
 PKCE, which stops an intercepted `code` being exchanged by anyone who does not
 hold the verifier.
 
-The API is the part that lost its protection when `SameSite` became `None`, and
-it is defended twice over. Requiring a JSON content type on every write forces a
-CORS preflight, which a hostile origin fails at the allowlist. That alone is not
-relied upon: a request simple enough to skip the preflight is still *sent*, and
-only its response is withheld from the attacker, so a write with a side effect
-would already have happened. The anti-forgery token is therefore load-bearing
-rather than defence in depth — the API rejects a write that does not carry it,
-whatever the origin check concluded.
+The API is what lost its protection when `SameSite` became `None`, and the
+decision there was to require **both** an origin allowlist and an anti-forgery
+token rather than either alone. The security conventions state the mechanism and
+why the allowlist cannot carry the load by itself; what belongs here is why we
+did not stop at one.
+
+An allowlist alone was rejected because it fails open in the case that matters:
+the request the attacker wants is the one that reaches the server, and no
+response-side check undoes a write already performed. A token alone was rejected
+for the opposite reason — it would hold, but it discards a cheap check that
+rejects most hostile traffic before any handler runs, and leaves a single
+implementation mistake as the only thing between a reader's session and a
+stranger. Neither saving was worth the narrowing.
 
 ## What the session's lifetime is
 
