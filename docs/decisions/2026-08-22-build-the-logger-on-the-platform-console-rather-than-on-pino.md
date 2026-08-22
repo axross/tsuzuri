@@ -147,12 +147,15 @@ inference for measurement:
   live indexer.
 - **`Error` object rendering and indexing** under Workers Logs, for any of
   the loggers considered here.
-- **Vercel Runtime Logs' own retention and size limits.** #69 measured
-  Workers Logs' figures directly — 3-day retention on the Free plan, 7-day on
-  Paid, and a 256 KB per-log cap before truncation
+- **Workers Logs' retention and size limits are documented, not observed.**
+  Cloudflare states 3-day retention on the Free plan, 7-day on Paid, and a
+  256 KB per-log cap past which a log is truncated
   ([Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/),
-  read 2026-08-22) — but the current arrangement's own retention and size
-  limits were out of scope for that spike and were never measured.
+  read 2026-08-22). #69 read those figures rather than exercising them:
+  `$workers.truncated` was `false` on every record it captured, so truncation
+  never fired, and retention was never watched over time.
+- **Vercel Runtime Logs' own retention and size limits.** Out of scope for
+  that spike and never established at all, documented or measured.
 
 **Consequence, and what is deliberately left alone.** `src/shared/lib/logger.ts`
 still constructs a pino instance today, and `README.md`'s tech-stack row still
