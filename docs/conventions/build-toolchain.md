@@ -8,7 +8,8 @@ takes, what standalone output traces — is owned by the installed
 own answers: which of those general rules this tree has collided with, what
 each collision cost, and what it now forecloses. Every claim was measured
 against `next@16.3.1`, and the adapter cases additionally against
-`@opennextjs/cloudflare@1.20.2`.
+`@opennextjs/cloudflare@1.20.2`, `@sentry/nextjs@10.70.0`, and
+`@sentry/cloudflare@10.70.0`.
 
 ## The Build: Turbopack, Then OpenNext
 
@@ -101,38 +102,84 @@ consumes `.next/standalone` MUST verify instrumentation against a running
 deployment that has served a request, never against a build that completed —
 this is exactly the case that distinction was written for.
 
+Supplying those chunks by hand did not end it either, and is worth recording
+even though `instrumentation.ts` is gone: the build then failed inside the
+adapter's own bundler, unable to resolve the hash-suffixed names Turbopack
+gives externalized packages — `Could not resolve
+"require-in-the-middle-<hash>"` — and declaring the package in
+`serverExternalPackages` only relocated the failure to the next unresolvable
+name, `@sentry/nextjs-<hash>`. The remedy had no bottom: each piece supplied
+by hand revealed the next one that was not traced.
+
 A second measurement made the file not worth saving even if the build had
 tolerated it: `instrumentation.ts`'s `register()` hook is **never called
 under OpenNext at all** — measured on a deployed Worker as `registerCalls: 0`,
 with `Sentry.getClient()` undefined and no envelope produced by a deliberate
-throw. Keeping the file would not have restored server-side Sentry capture
+throw, confirmed against the Sentry project and against a local ingest
+endpoint that captured nothing while accepting a hand-posted envelope. This is
+the failure mode worth stating plainly, because it is the one nothing
+announces: an error tracker reporting nothing is indistinguishable from an
+application with no errors. Every other failure in this section fails loudly,
+at build time; this one would only have surfaced when someone needed a stack
+trace and found the project had been blind for however long it had been
+deployed. Keeping the file would not have restored server-side Sentry capture
 regardless of whether `copyTracedFiles` accepted it.
 
 Server-side capture now comes from the Worker entrypoint instead: `worker.ts`
 wraps the OpenNext handler in `@sentry/cloudflare`'s `withSentry`, configured
 from the Worker's own `env` at the fetch boundary, rather than from a
-Next.js-level hook that this build path never runs. See `worker.ts`'s own
-comments for what that restores and how, and
+Next.js-level hook that this build path never runs. Measured on a deployed
+Worker, this recovers the exception, the console and fetch breadcrumbs, and
+the request context; the framework's own build-time route-handler
+instrumentation — `@sentry/nextjs`'s `withSentryConfig` in `next.config.ts` —
+turns out to have been in the bundle the whole time and merely to have had
+nowhere to report, so wiring a client in at the Worker boundary is what
+activates it. See `worker.ts`'s own comments for what that restores and how,
+and
 [docs/operations/production-deployment.md](../operations/production-deployment.md)
 for how its `SENTRY_DSN` is set.
+
+What `withSentry` does not recover is the stack trace. The adapter merges the
+server into one bundle and emits no source map for it, so every server-side
+frame lands at a coordinate in that bundle rather than in this project's own
+files. Uploading the source map Wrangler generates for `worker.ts` itself
+does not rescue it: none of that map's sources are this project's files,
+because the deepest thing it can describe is the adapter's already-bundled
+server output — Sentry locates the map, applies it, and reports an invalid
+location for every frame regardless. Client-side errors, captured through
+`instrumentation-client.ts`, symbolicate all the way to this project's own
+files and line numbers, so the half of the application carrying this
+project's own risk is the half whose traces are unusable today.
+
+A change adopting or replacing a host adapter MUST verify that a deliberate
+server-side throw produces an event in the error tracker, on a deployed
+instance, before treating error reporting as working. A build that succeeds,
+a deployment that serves requests, and error-reporting code present in the
+bundle together establish none of it — that is exactly the gap `register()`'s
+silence left here, and the one a future host change cannot assume away.
 
 ## What the Turbopack-and-OpenNext Build Confirmed
 
 The three questions above — does the host build with Turbopack, does it
-accept what a proxy or middleware file emits, does its standalone output
-carry `instrumentation.ts` — were, until this move, open questions about a
-host not yet chosen. A host has now been chosen and all three answered: the
-`@scope` constraint forecloses webpack regardless of host, so it was never in
-question; no proxy or middleware file exists, so nothing is left to reject;
-and `instrumentation.ts` is deleted, with server capture rebuilt at the
-Worker entrypoint instead.
+accept what a proxy or middleware file emits, and does its standalone output
+carry `instrumentation.ts` all the way to an error tracker that still reports
+— were, until this move, open questions about a host not yet chosen. A host
+has now been chosen and all three answered: the `@scope` constraint
+forecloses webpack regardless of host, so it was never in question; no proxy
+or middleware file exists, so nothing is left to reject; and
+`instrumentation.ts` is deleted, with server capture rebuilt at the Worker
+entrypoint instead — recovering events and breadcrumbs, though not stack
+traces.
 
 What is still worth keeping, for whichever constraint a future change
 reopens — a proxy reintroduced, a middleware file added, a build-time hook
-this host's adapter does not carry into what it deploys — is the method
-these three measurements share: verify against a **deployed** instance that
-has served a request, not against a build or a type-check that merely
-completed. Two of the three constraints above misled exactly there: a
-build that fails names the problem plainly, but a build that *passes* after
-a hand-patch, or a hook that a completed build simply never calls, does not
-announce that it bought nothing until something is asked to run.
+this host's adapter does not carry into what it deploys — is the method the
+third constraint's own measurements found the hard way: verify against a
+**deployed** instance that has served a request, not against a build or a
+type-check that merely completed. The other two constraints here fail loudly
+at build time and announce themselves; `instrumentation.ts` did not. A build
+that passed only because a missing file had been patched by hand still broke
+every request at runtime, and a build that passed in full still left
+`register()` uncalled and the error tracker silent — the one failure among
+these three that a green build and a serving deployment will not surface on
+their own.

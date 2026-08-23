@@ -33,8 +33,9 @@ describes.
   how a component's styles are scoped, where values come from, and the browser
   floor the scoping skeleton sets.
 - [conventions/build-toolchain.md](./conventions/build-toolchain.md) — which
-  bundler this project can be built with, what runtime its proxy takes, and
-  what the standalone output leaves out.
+  bundler this project can be built with, what runtime its proxy takes, what
+  the standalone output leaves out, and why the Cloudflare Worker's
+  server-side stack traces still don't resolve to this project's own files.
 - [conventions/documentation.md](./conventions/documentation.md) — how this
   project's own documentation is kept true: correcting what a change
   invalidated, making a new document reachable, and the checks a documentation
