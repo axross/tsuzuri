@@ -56,6 +56,7 @@ distinguishes, so a session does not have to open the index for one of these.
 | Any stylesheet, design token, or CSS Module | [docs/conventions/styling.md](./docs/conventions/styling.md) |
 | Choosing or changing a bundler, build tool, or hosting adapter | [docs/conventions/build-toolchain.md](./docs/conventions/build-toolchain.md) |
 | The per-pull-request preview environment | [docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md) |
+| The production deployment or release pipeline | [docs/operations/production-deployment.md](./docs/operations/production-deployment.md) |
 
 ## Response Approach
 
