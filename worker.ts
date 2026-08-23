@@ -16,6 +16,13 @@ export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
 
 type Env = {
 	SENTRY_DSN?: string;
+	// Bound in wrangler.jsonc as `version_metadata`. Read automatically by
+	// @sentry/cloudflare's own `getFinalOptions` — this file never reads it
+	// directly — to fill `release` on every event, since the options
+	// callback below does not set one itself. `id` is the only field that
+	// matters here; `getFinalOptions` checks for it before trusting the
+	// binding at all.
+	CF_VERSION_METADATA?: { id: string };
 };
 
 /**
@@ -33,6 +40,13 @@ type Env = {
  * directly) confirms that client then never opens a transport and every
  * capture call short-circuits on `_isEnabled()` before anything is sent — so
  * the Worker starts, serves requests, and makes no network call.
+ *
+ * The options callback below sets no `release`: `@sentry/cloudflare`'s own
+ * `getFinalOptions` (node_modules/@sentry/cloudflare/build/esm/options.js)
+ * fills it from `env.CF_VERSION_METADATA.id` whenever the returned options
+ * omit the key, and `wrangler.jsonc` binds that Worker Version metadata for
+ * exactly this — so every server-side event carries the same build
+ * identifier the client half already does via `withSentryConfig`.
  */
 export default Sentry.withSentry(
 	(env: Env) => ({

@@ -13,5 +13,15 @@
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
+	},
+	// Read by @sentry/cloudflare's getFinalOptions
+	// (node_modules/@sentry/cloudflare/build/esm/options.js) as
+	// env.CF_VERSION_METADATA.id, and used to fill `release` on every
+	// Sentry event when worker.ts's options callback does not set one
+	// itself — see worker.ts. Confirmed a supported binding key at the
+	// pinned wrangler 4.125.0 (config-schema.json's `version_metadata`
+	// property: `{ binding: string }`).
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA"
 	}
 }
