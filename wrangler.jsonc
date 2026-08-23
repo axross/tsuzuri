@@ -1,0 +1,38 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "tsuzuri",
+	// `worker.ts`, not `.open-next/worker.js` directly: it wraps the OpenNext
+	// handler in `@sentry/cloudflare`'s `withSentry`. See the file itself.
+	"main": "worker.ts",
+	// 2025-08-16 or later, per Sentry's own "Next.js on Cloudflare" guide: it
+	// is when `https.request` — which the SDK's transport uses — reached the
+	// Workers runtime, which is a later floor than OpenNext's own.
+	"compatibility_date": "2025-08-16",
+	// Required by both @opennextjs/cloudflare and @sentry/cloudflare.
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	// Read by @sentry/cloudflare's getFinalOptions
+	// (node_modules/@sentry/cloudflare/build/esm/options.js) as
+	// env.CF_VERSION_METADATA.id, and used to fill `release` on every
+	// Sentry event when worker.ts's options callback does not set one
+	// itself — see worker.ts. Confirmed a supported binding key at the
+	// pinned wrangler 4.125.0 (config-schema.json's `version_metadata`
+	// property: `{ binding: string }`).
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA"
+	},
+	// worker.ts's `withSentry` options callback sets no `environment` key, so
+	// @sentry/cloudflare's getFinalOptions
+	// (node_modules/@sentry/cloudflare/build/esm/options.js) fills it in from
+	// env.SENTRY_ENVIRONMENT automatically — confirmed by reading the
+	// installed package rather than assumed. This is the production value;
+	// the per-pull-request preview templating step in
+	// .github/workflows/preview-deployment.yaml overrides it to "preview" so
+	// the two tiers are distinguishable in Sentry.
+	"vars": {
+		"SENTRY_ENVIRONMENT": "production"
+	}
+}

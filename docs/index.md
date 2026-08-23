@@ -34,8 +34,8 @@ describes.
   floor the scoping skeleton sets.
 - [conventions/build-toolchain.md](./conventions/build-toolchain.md) — which
   bundler this project can be built with, what runtime its proxy takes, what
-  the standalone output leaves out, and why a deployment that serves requests
-  can still report no errors.
+  the standalone output leaves out, and why the Cloudflare Worker's
+  server-side stack traces still don't resolve to this project's own files.
 - [conventions/documentation.md](./conventions/documentation.md) — how this
   project's own documentation is kept true: correcting what a change
   invalidated, making a new document reachable, and the checks a documentation
@@ -49,6 +49,9 @@ describes.
 - [operations/preview-deployment.md](./operations/preview-deployment.md) — the
   per-pull-request preview environment: what a run does, and the one-time setup
   that arms it.
+- [operations/production-deployment.md](./operations/production-deployment.md)
+  — the manually dispatched production deployment and the release it cuts:
+  what a run does, and the one-time operator setup it depends on.
 - [operations/agent-skills.md](./operations/agent-skills.md) — installing and
   refreshing the agent skills, and the register of deviations and gaps.
 - [operations/agent-sessions.md](./operations/agent-sessions.md) — how a

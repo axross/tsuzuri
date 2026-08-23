@@ -1,22 +1,24 @@
 name: Preview Deployment
 
-# Per-pull-request preview environments, deployed through Vercel. The procedure,
-# the one-time operator setup, and how to read a preview that looks stale are in
+# Per-pull-request preview environments, deployed as one named Cloudflare
+# Worker per pull request. The procedure, the one-time operator setup, and
+# how to read a preview that looks stale are in
 # docs/operations/preview-deployment.md.
 #
-# This workflow is PREFLIGHT-GATED on purpose: with any of the three Vercel
-# secrets missing it deploys nothing, comments nothing, and concludes green. It
-# has to be able to merge before the Vercel project it deploys to exists, and a
-# preflight that failed instead would make every pull request red for a reason
-# no author could fix. A pull request from a fork gets no secrets either, and
-# lands in the same green no-op rather than an error.
+# This workflow is PREFLIGHT-GATED on purpose: with either Cloudflare secret
+# missing it deploys nothing, comments nothing, and concludes green. It has
+# to be able to merge before the Cloudflare account it deploys to is
+# configured, and a preflight that failed instead would make every pull
+# request red for a reason no author could fix. A pull request from a fork
+# gets no secrets either, and lands in the same green no-op rather than an
+# error.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
 # One deploy at a time per pull request, and let a newer push supersede an
-# in-flight one — a superseded deploy would only race to re-point the alias.
+# in-flight one — a superseded deploy would only race to re-point the Worker.
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -26,8 +28,7 @@ permissions:
   pull-requests: write
 
 env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
   preview:
@@ -39,10 +40,10 @@ jobs:
       - name: Preflight
         id: preflight
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo "::notice::Vercel is not configured for this repository — skipping the preview deploy. See docs/operations/preview-deployment.md."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare is not configured for this repository — skipping the preview deploy. See docs/operations/preview-deployment.md."
             echo "armed=false" >> "$GITHUB_OUTPUT"
           else
             echo "armed=true" >> "$GITHUB_OUTPUT"
@@ -59,25 +60,145 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Dependency Installation
+        if: steps.preflight.outputs.armed == 'true'
+        run: npm install
+
+      # `vars.NEXT_PUBLIC_SENTRY_DSN` is a repository *variable*, not a
+      # secret — a DSN is public by design, it ships inside the client
+      # bundle, see docs/conventions/security.md. It is still absent on a
+      # fork pull request the same way the Cloudflare secrets are, but the
+      # preflight guard above already keeps this step from running in that
+      # case. `::warning::` rather than a failure: a missing DSN degrades
+      # the deployed client to reporting nothing, it does not break the
+      # build, and this is what makes that otherwise-silent case visible in
+      # the Actions log instead of being discovered months later. Never
+      # prints the value itself, only whether it was present.
+      - name: Warn if the client Sentry DSN is not configured
+        if: steps.preflight.outputs.armed == 'true' && vars.NEXT_PUBLIC_SENTRY_DSN == ''
+        run: echo "::warning::NEXT_PUBLIC_SENTRY_DSN is not set as a repository variable — this preview's client bundle will ship with no DSN and report nothing to Sentry."
+
+      # SENTRY_ORG/SENTRY_PROJECT are also repository variables, not
+      # secrets — a Sentry org/project slug, not a token, key, DSN, or
+      # internal hostname (see docs/conventions/security.md). next.config.ts
+      # passes them explicitly to withSentryConfig; project is unconditionally
+      # required for canUploadSourceMaps (@sentry/bundler-plugin-core) to
+      # attempt the upload, and org is too unless SENTRY_AUTH_TOKEN is
+      # org-scoped (starts with sntrys_, which already carries the org) — with
+      # either required one unset the upload is silently skipped rather than
+      # attempted, so this warns the same way the DSN warning above does, and
+      # for the same reason: a missing or misspelled variable belongs in the
+      # Actions log, not discovered only when a stack trace won't
+      # symbolicate. This guard doesn't distinguish an org-scoped token, so it
+      # can warn even when the upload would still succeed.
+      - name: Warn if the Sentry org/project is not configured
+        if: steps.preflight.outputs.armed == 'true' && (vars.SENTRY_ORG == '' || vars.SENTRY_PROJECT == '')
+        run: echo "::warning::SENTRY_ORG and/or SENTRY_PROJECT is not set as a repository variable — this preview's source-map upload will be skipped."
+
+      # SENTRY_AUTH_TOKEN, NEXT_PUBLIC_SENTRY_DSN, SENTRY_ORG, and
+      # SENTRY_PROJECT are the same repository-level values production's
+      # Build step below already carries (see production-deployment.yaml and
+      # README.md): the token arms the client source-map upload so a
+      # preview's client errors symbolicate the same way production's do,
+      # the DSN is what lets the deployed client bundle report at all —
+      # Next.js inlines it at build time, so it has to be present here
+      # rather than only at runtime — and org/project are what
+      # canUploadSourceMaps (next.config.ts) needs to attempt the upload at
+      # all. SENTRY_RELEASE is this pull request's head SHA, the same
+      # commit the "Comment the preview URL" step below reports — not
+      # `github.sha`, which on a `pull_request` trigger is a merge commit
+      # rather than a commit on this branch. `next.config.ts`'s explicit
+      # `release.name` reads this to tag both the browser bundle and the
+      # source-map upload; the Wrangler config templated below carries the
+      # same value to the deployed Worker, so a preview's client and server
+      # events correlate under one release in Sentry.
+      - name: Build
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ github.event.pull_request.head.sha }}
+        run: npx opennextjs-cloudflare build
+
+      # Templates a per-pull-request copy of wrangler.jsonc rather than
+      # deploying with `--name`: issue #70 measured that `--name` renames the
+      # script without rewriting a WORKER_SELF_REFERENCE service binding that
+      # carries the old name. This tree binds no such service today, but the
+      # pipeline stays written to avoid the trap because issue #37 will grow
+      # the binding set. `unstable_readConfig` (the same "unstable" reader
+      # Wrangler and the OpenNext CLI use internally to parse this file) is
+      # deliberately not used here to avoid depending on that API surface for
+      # a value this simple; a plain JSONC read is enough because
+      # wrangler.jsonc's own comments are always whole lines (see the file
+      # itself) — this strips exactly those and nothing inside a value.
+      - name: Template the Wrangler config for this pull request
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+        run: |
+          set -euo pipefail
+          node <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const raw = readFileSync("wrangler.jsonc", "utf8");
+          const withoutComments = raw
+            .split("\n")
+            .filter((line) => !line.trim().startsWith("//"))
+            .join("\n");
+          const config = JSON.parse(withoutComments);
+          config.name = `tsuzuri-pr-${process.env.PR_NUMBER}`;
+          // Overrides the production value wrangler.jsonc's `vars` sets, so a
+          // preview deploy's Sentry events are distinguishable from
+          // production's rather than sharing its environment (PR-03), and
+          // carries the same release identifier the Build step above already
+          // gave the client half (see next.config.ts), so this preview's
+          // client and server events agree on one release in Sentry.
+          // SENTRY_DSN reuses NEXT_PUBLIC_SENTRY_DSN's value rather than a
+          // dedicated secret — a DSN is public by design, it already ships
+          // inside the client bundle (see docs/conventions/security.md) —
+          // and is a plain `var` rather than a Wrangler secret because each
+          // pull request deploys a distinct Worker script that no pre-set
+          // secret reaches (see worker.ts). With the repository variable
+          // unset, process.env.NEXT_PUBLIC_SENTRY_DSN is undefined and
+          // JSON.stringify omits the key entirely below (verified), so the
+          // Worker simply gets no SENTRY_DSN binding and worker.ts's
+          // existing dsn-unset path applies unchanged.
+          config.vars = {
+            ...config.vars,
+            SENTRY_ENVIRONMENT: "preview",
+            SENTRY_RELEASE: process.env.PR_HEAD_SHA,
+            SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+          };
+          writeFileSync("wrangler.preview.json", `${JSON.stringify(config, null, 2)}\n`);
+          EOF
+
+      # Through the @opennextjs/cloudflare CLI, not `wrangler deploy`
+      # directly, so any cache-population step a later binding set requires
+      # (issue #37) runs rather than being silently skipped (issue #70). The
+      # deployed URL is read back from this command's own output rather than
+      # constructed from a guessed workers.dev subdomain, which is not
+      # knowable from this repository.
       - name: Deploy
         id: deploy
         if: steps.preflight.outputs.armed == 'true'
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
-          npx --yes vercel@latest build --token="$VERCEL_TOKEN"
-          url="$(npx --yes vercel@latest deploy --prebuilt --token="$VERCEL_TOKEN")"
-          # A deterministic alias, so a link shared early keeps working across
-          # pushes. The short SHA in the comment is what says whether the
-          # deployment behind it is current.
-          alias="tsuzuri-pr-${{ github.event.pull_request.number }}.vercel.app"
-          npx --yes vercel@latest alias set "$url" "$alias" --token="$VERCEL_TOKEN"
-          echo "alias=https://$alias" >> "$GITHUB_OUTPUT"
+          npx opennextjs-cloudflare deploy --config wrangler.preview.json 2>&1 | tee deploy-output.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' deploy-output.log | tail -n1)"
+          if [ -z "$url" ]; then
+            echo "::error::Could not find the deployed Worker's URL in the deploy command's own output."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # A fresh comment per deploy rather than an edit, so the thread reads as a
-      # history of what was deployed when.
+      # A fresh comment per deploy rather than an edit, so the thread reads as
+      # a history of what was deployed when.
       - name: Comment the preview URL
         if: steps.preflight.outputs.armed == 'true'
         uses: actions/github-script@v7
@@ -89,10 +210,9 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               body: [
-                `**Preview deployed** — ${{ steps.deploy.outputs.alias }}`,
+                `**Preview deployed** — ${{ steps.deploy.outputs.url }}`,
                 ``,
-                `Built from \`${sha}\`. If that is not the branch head, this deploy is not current:`,
-                `the alias keeps serving the last deploy that built successfully.`,
+                `Built from \`${sha}\`.`,
               ].join("\n"),
             })
 
@@ -105,20 +225,116 @@ jobs:
       - name: Preflight
         id: preflight
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo "::notice::Vercel is not configured for this repository — nothing to tear down."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare is not configured for this repository — nothing to tear down."
             echo "armed=false" >> "$GITHUB_OUTPUT"
           else
             echo "armed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Remove the alias
+      - name: Checkout
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: steps.preflight.outputs.armed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dependency Installation
+        if: steps.preflight.outputs.armed == 'true'
+        run: npm install
+
+      # `wrangler delete`'s exit code is not trusted here — it can exit
+      # non-zero on a deletion that already succeeded, because it enumerates
+      # Workers KV namespaces unconditionally on every deletion regardless of
+      # the token's scope or whether the Worker being deleted binds any KV
+      # namespace at all. See docs/operations/preview-deployment.md § "Arming
+      # It" for the measurement this is based on. The next step verifies
+      # deletion by checking the account's Worker list instead, which is the
+      # actual pass/fail gate.
+      - name: Delete the Worker
         if: steps.preflight.outputs.armed == 'true'
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -uo pipefail
+          npx wrangler delete "tsuzuri-pr-${{ github.event.pull_request.number }}" --force || true
+
+      # Cloudflare's REST "List Workers" endpoint
+      # (GET /accounts/{account_id}/workers/scripts) is what `wrangler` itself
+      # calls for this — confirmed by reading the Cloudflare SDK bundled
+      # inside the pinned `wrangler` package rather than assumed, since
+      # `wrangler` itself has no CLI subcommand that lists every Worker in
+      # the account. A script's `id` in that response is its name.
+      # -sSf makes curl itself fail (non-zero exit, under set -e) on a
+      # non-2xx HTTP status, and the Node script below additionally checks
+      # body.success === true before trusting body.result at all — on
+      # Cloudflare's error envelope (`result: null`), `(body.result ?? [])`
+      # would otherwise silently coerce to `[]` and this step would report
+      # the Worker gone having verified nothing. Both checks fail loudly
+      # rather than falling through to "confirmed removed".
+      #
+      # The Node script uses one exit code per outcome rather than letting
+      # an unrelated failure fall through to the "still present" branch:
+      #   0 - Worker absent from the list (teardown worked)
+      #   1 - Worker still present in the list (teardown did not work)
+      #   2 - Cloudflare returned success: false (cannot verify either way)
+      #   3 - the script itself failed unexpectedly (e.g. a malformed body
+      #       that makes JSON.parse throw) — caught explicitly rather than
+      #       left to crash with Node's default uncaught-exception exit code
+      #       of 1, which would otherwise be indistinguishable from "Worker
+      #       still present" (exit code 1) and misreport the cause. The step
+      #       still fails either way — there is no false green — but this is
+      #       what keeps the failure message honest about what happened.
+      - name: Verify the Worker is gone
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER_NAME: tsuzuri-pr-${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          alias="tsuzuri-pr-${{ github.event.pull_request.number }}.vercel.app"
-          npx --yes vercel@latest alias rm "$alias" --yes --token="$VERCEL_TOKEN"
+          scripts="$(curl -sSf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts")"
+          set +e
+          echo "$scripts" | node -e "
+            let data = '';
+            process.stdin.on('data', (chunk) => { data += chunk; });
+            process.stdin.on('end', () => {
+              try {
+                const body = JSON.parse(data);
+                if (body.success !== true) {
+                  console.error('::error::Cloudflare returned success: false while listing Workers; cannot verify teardown.');
+                  process.exit(2);
+                }
+                const names = (body.result ?? []).map((script) => script.id);
+                process.exit(names.includes(process.env.WORKER_NAME) ? 1 : 0);
+              } catch (error) {
+                console.error('::error::Verify-teardown script failed unexpectedly (' + error.message + '); cannot verify whether the Worker was removed.');
+                process.exit(3);
+              }
+            });
+          "
+          status=$?
+          set -e
+          case "$status" in
+            0)
+              echo "Worker $WORKER_NAME confirmed removed from the account Worker list."
+              ;;
+            1)
+              echo "::error::Worker $WORKER_NAME still appears in the account Worker list after teardown."
+              exit 1
+              ;;
+            2)
+              # Message already printed by the Node script above.
+              exit 1
+              ;;
+            *)
+              # Message already printed by the Node script above.
+              exit 1
+              ;;
+          esac

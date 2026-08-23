@@ -11,6 +11,14 @@ node_modules
 .next
 *.tsbuildinfo
 
+# OpenNext / Wrangler build output and local state
+.open-next
+.wrangler
+
+# Per-pull-request Wrangler config the preview-deployment workflow templates
+# at deploy time; never a committed file.
+wrangler.preview.json
+
 # Test artifacts
 coverage
 /test-results

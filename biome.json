@@ -13,13 +13,16 @@
 			"messages/**",
 			"next.config.ts",
 			"next-env.d.ts",
-			"instrumentation.ts",
 			"instrumentation-client.ts",
 			"vitest.config.ts",
 			"playwright.config.ts",
 			"tsconfig.json",
 			"package.json",
-			"biome.json"
+			"biome.json",
+			"worker.ts",
+			"open-next.config.ts",
+			"wrangler.jsonc",
+			"release.config.js"
 		]
 	},
 	"formatter": {

@@ -106,3 +106,22 @@ live in `.env.local`, which `.gitignore` excludes, and in the hosting
 platform's own environment configuration. A change MUST NOT commit a token, a
 key, a DSN, or an internal hostname, and MUST NOT print one into a log, a
 comment, or a commit message.
+
+**The one exception is a Sentry DSN, and it is narrow.** Sentry's own docs
+state a DSN is "safe to keep public because they only allow submission of new
+events and related event data; they do not allow read access to any
+information"
+([Sentry: What is a DSN?](https://docs.sentry.io/product/sentry-basics/concepts/dsn-explainer/)).
+A write-only ingest identifier designed to sit inside a client bundle where
+anyone can read it is not the kind of value this rule exists to keep out of
+the tree, so this project treats a Sentry DSN as public: it is committed as
+`.env.example`'s documented name, held in the repository *variable*
+`NEXT_PUBLIC_SENTRY_DSN`, set as a Wrangler *secret* on the production Worker
+(`docs/operations/production-deployment.md`), and templated as a plain
+Wrangler `var` on preview Workers (`docs/operations/preview-deployment.md`) —
+none of which needs the confidentiality the rule above protects.
+
+**This is not a blanket exemption for "a DSN."** A database or other
+connection-string DSN typically embeds credentials of its own and stays fully
+covered by the MUST NOT above; only Sentry's write-only event-ingest DSN is
+exempt.

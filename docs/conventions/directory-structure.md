@@ -16,8 +16,7 @@ src/
     state/      cross-feature Zustand stores
     styles/     the theme layer
     ui/         cross-feature presentational components
-  i18n/         next-intl routing and request configuration
-  proxy.ts      next-intl locale negotiation, in front of every matched request
+  i18n/         next-intl request configuration
 messages/       one message catalog per locale
 e2e/            Playwright specs and the journey catalog
 ```
@@ -55,22 +54,28 @@ safely because nobody knows who depends on them.
 Moving a module into `shared/` when the second caller arrives is cheap. Moving
 it back out once four features import it is not.
 
-## Route Segments Carry the Locale
+## Routes Carry No Locale Segment
 
-Every route lives under `src/app/[locale]/`, because next-intl resolves the
-active locale from that segment. A route added outside it will not resolve
-messages, and the failure looks like a missing translation rather than a
-misplaced file.
+Every route lives directly under `src/app/`, with no `[locale]` segment in
+front of it: `/` is the landing route, not `/en`. next-intl resolves the
+single locale this project ships, `en`, from `src/i18n/request.ts` rather
+than from a URL segment, negotiated by no proxy or middleware file — see
+[build-toolchain.md](./build-toolchain.md) for why a proxy is what this setup
+was chosen to avoid.
 
-The project currently ships one locale, `en`. The segment stays regardless: it
-is what makes adding a second locale a data change rather than a restructuring.
+Adding a second locale later is a matter of extending `src/i18n/request.ts`
+and adding its message catalog under `messages/`, not of restructuring routes
+or reinstating a proxy — next-intl's own locale-negotiation setup is a
+separate, larger change this document does not anticipate, and would need
+its own decision if this project ever needs it.
 
 ## Names
 
 Files and directories are **kebab-case** — `preferences-store.ts`,
-`github-platform-limits.md` — with two exceptions the framework imposes:
-Next.js's own reserved filenames (`layout.tsx`, `page.tsx`, `proxy.ts`,
-`instrumentation.ts`) and its bracketed dynamic segments (`[locale]`).
+`github-platform-limits.md` — with one exception the framework imposes:
+Next.js's own reserved filenames, `layout.tsx` and `page.tsx` today. A
+bracketed dynamic segment (for example `[slug]`) would be a second exception
+if this tree had one; it does not — no route here takes a dynamic segment.
 
 A unit test sits beside the module it covers as `<module>.test.ts`, never in a
 parallel test tree. What a test belongs in, and where an end-to-end test goes
@@ -81,15 +86,22 @@ A CSS Module is named for its component — `page.module.css` beside `page.tsx`.
 ## Configuration Stays at the Root
 
 `biome.json`, `next.config.ts`, `tsconfig.json`, `vitest.config.ts`,
-`playwright.config.ts`, `instrumentation.ts`, and `instrumentation-client.ts`
-sit at the repository root because their tools look for them there. Do not
-relocate one behind a config path option to tidy the root; the cost lands on
-every contributor who then cannot find it.
+`playwright.config.ts`, `instrumentation-client.ts`, `wrangler.jsonc`,
+`open-next.config.ts`, and `release.config.js` sit at the repository root
+because their tools look for them there. Do not relocate one behind a config
+path option to tidy the root; the cost lands on every contributor who then
+cannot find it.
 
-`proxy.ts` is the exception, and it MUST stay at `src/proxy.ts`: Next.js looks
-for it beside `app/`, which lives under `src/` here. At the repository root it
-is not an error — the build simply does not list a proxy, and locale
-negotiation stops happening with nothing to point at.
+`worker.ts` also sits at the root, but it is not configuration in the same
+sense as the rest of that list — it is the Worker's own entrypoint, the
+module that actually runs on every request. `wrangler.jsonc`'s `main` field
+points at it, rather than at the OpenNext-generated `.open-next/worker.js`
+directly, because Wrangler needs a concrete file of this project's own to
+build and to produce a source map for, and because this is where
+`@sentry/cloudflare`'s `withSentry` wraps the OpenNext handler for
+server-side error capture. [build-toolchain.md](./build-toolchain.md) states
+what that wrapping does and why `worker.ts` and `.open-next` are excluded
+from `tsconfig.json`.
 
 ## What Biome Sees Is an Allowlist
 

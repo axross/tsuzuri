@@ -1,12 +1,18 @@
-import { hasLocale } from "next-intl";
 import { getRequestConfig } from "next-intl/server";
-import { routing } from "./routing";
 
-export default getRequestConfig(async ({ requestLocale }) => {
-	const requested = await requestLocale;
-	const locale = hasLocale(routing.locales, requested)
-		? requested
-		: routing.defaultLocale;
+/**
+ * The single locale this project serves today. No proxy or middleware file
+ * negotiates it from the request — next-intl's documented setup for a
+ * project with no i18n routing reads it from here instead. Adding a second
+ * locale is a matter of extending this list and adding its message catalog
+ * under `messages/`, not of reinstating a proxy.
+ */
+export const locales = ["en"] as const;
+
+export const defaultLocale: (typeof locales)[number] = "en";
+
+export default getRequestConfig(async () => {
+	const locale = defaultLocale;
 
 	return {
 		locale,

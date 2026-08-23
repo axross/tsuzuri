@@ -1,0 +1,179 @@
+name: Production Deployment
+
+# Deploys the default branch's head to the production Cloudflare Worker,
+# cutting a release with semantic-release first. Dispatched by hand — never
+# on a push, never on a published release — which is the maintainer's own
+# decision (issue #79), so nothing reaches production without an operator
+# choosing to.
+#
+# Only the DEPLOY half is preflight-gated. The release half needs nothing
+# beyond the job's own GITHUB_TOKEN, which every Actions job already carries,
+# so it always runs — a dispatch whose commits warrant no release still
+# deploys, and a dispatch with the Cloudflare secrets absent still cuts the
+# release, skips the deploy, and concludes green. See
+# docs/operations/preview-deployment.md for what "armed" means here; this
+# workflow keeps the same step-level shape.
+
+on:
+  workflow_dispatch:
+
+# Only one production deployment at a time; queue rather than cancel, so a
+# second dispatch never lands mid-release of the first.
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+# Least privilege for what semantic-release actually does in this
+# configuration: create the Git tag, create the GitHub Release, and push the
+# version-bump commit (package.json, CHANGELOG.md) back to the default
+# branch. `successComment`/`failComment` are off in release.config.js
+# precisely so this workflow needs no issues/pull-requests permission on top
+# of that. The deploy steps need no GitHub permission at all — only the
+# Cloudflare secrets below.
+permissions:
+  contents: write
+
+jobs:
+  release-and-deploy:
+    name: Release and Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Preflight
+        id: preflight
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare is not configured for this repository — the release below will still be cut, but the production deploy is skipped. See docs/operations/preview-deployment.md."
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only the deploy half needs this: the release half is already confined
+      # to the default branch by release.config.js's own `branches: ["main"]`
+      # (semantic-release exits 0 without releasing off that branch). Nothing
+      # here stops workflow_dispatch from being fired against any ref, and
+      # Checkout below takes whatever ref the operator selected — so without
+      # this check, a dispatch from a non-default branch would build and
+      # deploy *that branch's* code to the production Worker. Fails the job
+      # outright rather than silently skipping, so an operator who dispatched
+      # expecting a deployment is told rather than left with a green run that
+      # deployed nothing. See docs/operations/production-deployment.md.
+      - name: Verify the dispatch is from the default branch
+        if: steps.preflight.outputs.armed == 'true' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production deploy dispatched from ${{ github.ref }}, not refs/heads/main. Refusing to build or deploy this branch's code — re-dispatch from the default branch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # semantic-release reads the full tag and commit history to resolve
+          # the previous version and the commits since it; the default
+          # shallow checkout has neither.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dependency Installation
+        run: npm install
+
+      # Always runs, regardless of the preflight above: this needs only the
+      # job's own GITHUB_TOKEN. Exits without releasing when nothing since
+      # the last tag warrants one — the deploy step below runs either way,
+      # because deploying is what the operator dispatched this workflow to
+      # do. release.config.js carries the one custom rule (breaking -> minor)
+      # that keeps every release inside 0.x.
+      - name: Release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
+
+      # `git rev-parse HEAD` rather than `github.sha`: the Release step above
+      # (`@semantic-release/git`) commits and pushes a version bump
+      # (package.json, CHANGELOG.md) to this checkout's local branch when it
+      # cuts a release, advancing HEAD past the commit that triggered this
+      # dispatch — and it is that advanced HEAD the Build step below actually
+      # builds. When the Release step cuts no release, HEAD is unchanged and
+      # this is `github.sha`. Either way, this is the commit this run
+      # actually deploys, computed rather than assumed so the Sentry release
+      # below never names a commit this run did not build.
+      - name: Resolve the deployed commit
+        id: release-sha
+        if: steps.preflight.outputs.armed == 'true'
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # `vars.NEXT_PUBLIC_SENTRY_DSN` is a repository *variable*, not a
+      # secret — a DSN is public by design, it ships inside the client
+      # bundle, see docs/conventions/security.md. `::warning::` rather than a
+      # failure: a missing DSN degrades the deployed client to reporting
+      # nothing, it does not break the build, and this is what makes that
+      # otherwise-silent case visible in the Actions log instead of being
+      # discovered months later. Never prints the value itself, only whether
+      # it was present.
+      - name: Warn if the client Sentry DSN is not configured
+        if: steps.preflight.outputs.armed == 'true' && vars.NEXT_PUBLIC_SENTRY_DSN == ''
+        run: echo "::warning::NEXT_PUBLIC_SENTRY_DSN is not set as a repository variable — this build's client bundle will ship with no DSN and report nothing to Sentry."
+
+      # SENTRY_ORG/SENTRY_PROJECT are also repository variables, not
+      # secrets — a Sentry org/project slug, not a token, key, DSN, or
+      # internal hostname (see docs/conventions/security.md). next.config.ts
+      # passes them explicitly to withSentryConfig; project is unconditionally
+      # required for canUploadSourceMaps (@sentry/bundler-plugin-core) to
+      # attempt the upload, and org is too unless SENTRY_AUTH_TOKEN is
+      # org-scoped (starts with sntrys_, which already carries the org) — with
+      # either required one unset the upload is silently skipped rather than
+      # attempted, so this warns the same way the DSN warning above does, and
+      # for the same reason: a missing or misspelled variable belongs in the
+      # Actions log, not discovered only when a stack trace won't
+      # symbolicate. This guard doesn't distinguish an org-scoped token, so it
+      # can warn even when the upload would still succeed.
+      - name: Warn if the Sentry org/project is not configured
+        if: steps.preflight.outputs.armed == 'true' && (vars.SENTRY_ORG == '' || vars.SENTRY_PROJECT == '')
+        run: echo "::warning::SENTRY_ORG and/or SENTRY_PROJECT is not set as a repository variable — this build's source-map upload will be skipped."
+
+      # SENTRY_AUTH_TOKEN gates only the client source-map upload inside this
+      # build (see next.config.ts); its absence degrades the build rather
+      # than blocking it, so it is not part of the preflight guard above.
+      # SENTRY_ORG/SENTRY_PROJECT are what canUploadSourceMaps needs to
+      # attempt the upload at all. SENTRY_RELEASE is the commit resolved
+      # above, read by next.config.ts's explicit `release.name` to tag both
+      # the browser bundle and the source-map upload — the Deploy step below
+      # hands the Worker the same value, so this deploy's client and server
+      # events correlate under one release in Sentry.
+      - name: Build
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ steps.release-sha.outputs.sha }}
+        run: npx opennextjs-cloudflare build
+
+      # wrangler.jsonc's own `name` ("tsuzuri") is used as-is: unlike the
+      # preview pipeline, production is one fixed Worker, so there is nothing
+      # to template per run. `--var` is instead appended straight to the
+      # `opennextjs-cloudflare deploy` invocation — confirmed by reading its
+      # source (node_modules/@opennextjs/cloudflare/dist/cli/commands/
+      # deploy.js) and by `wrangler deploy --dry-run`, which prints the
+      # binding it resolves — that this CLI forwards its own unrecognized
+      # positional arguments straight through to the underlying
+      # `wrangler deploy` call, the same mechanism it already uses for
+      # `--config` above. worker.ts's `env.SENTRY_RELEASE` binding is what
+      # `getFinalOptions` reads to fill the server-side `release`.
+      - name: Deploy
+        if: steps.preflight.outputs.armed == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SENTRY_RELEASE: ${{ steps.release-sha.outputs.sha }}
+        run: npx opennextjs-cloudflare deploy --var "SENTRY_RELEASE:$SENTRY_RELEASE"

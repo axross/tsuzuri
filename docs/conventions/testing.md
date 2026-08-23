@@ -23,9 +23,11 @@ recorded responses rather than from what the code hopes to receive.
 
 ## End-to-End Tests Cover Journeys, Under `e2e/`
 
-An end-to-end test runs under Playwright from `e2e/`, drives a build of the
-application the way a person would, and starts that application itself rather
-than assuming a server is already running.
+An end-to-end test runs under Playwright from `e2e/`, and starts the
+application itself rather than assuming a server is already running: it
+builds the OpenNext output and drives it through `wrangler dev` — the Worker
+that actually gets deployed, not a `next start` build — the way a person
+would.
 
 The suite runs chromium only. This is a deliberate narrowing: the project's
 own risk is in what it does with GitHub, not in cross-browser rendering, and a
