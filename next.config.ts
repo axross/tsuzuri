@@ -45,12 +45,23 @@ const nextConfig: NextConfig = {};
  * unconfigured before this. They're a Sentry organization and project slug,
  * not a token, key, DSN, or internal hostname, so `docs/conventions/
  * security.md` § "Secrets Stay Out of the Tree" doesn't apply to them —
- * hardcoded here rather than added as two more secrets an operator has to
- * set. `SENTRY_AUTH_TOKEN` stays the only secret this needs; its absence
- * (or an invalid value) degrades the upload rather than failing the build —
- * `debugIdUploadPlugin`'s own writeBundle hook catches an upload error and
- * logs it (`handleRecoverableError(e, false)`, throwByDefault: false),
- * rather than re-throwing it into the build.
+ * but they're still read from repository *variables* (`SENTRY_ORG`,
+ * `SENTRY_PROJECT`) rather than hardcoded, so an operator can point a fork
+ * or a renamed project at a different Sentry org/project without editing
+ * this file. Passed explicitly rather than left to `withSentryConfig`'s own
+ * `process.env["SENTRY_ORG"]` / `process.env["SENTRY_PROJECT"]` fallback —
+ * `normalizeUserOptions` (`@sentry/bundler-plugin-core`) resolves an
+ * explicit option over the env var, so leaving these out is what would make
+ * the fallback take effect, and being explicit here is what keeps this one
+ * line the place a reader confirms where the value actually comes from,
+ * matching `authToken` and `release.name` below. Both deploying workflows
+ * print an `::warning::` when either variable is unset, so a missing or
+ * misspelled one shows up in the Actions log rather than degrading the
+ * upload unnoticed. `SENTRY_AUTH_TOKEN` stays the only secret this needs;
+ * its absence (or an invalid value) degrades the upload rather than failing
+ * the build — `debugIdUploadPlugin`'s own writeBundle hook catches an
+ * upload error and logs it (`handleRecoverableError(e, false)`,
+ * throwByDefault: false), rather than re-throwing it into the build.
  *
  * `release.name` is read from `SENTRY_RELEASE`, set by each deploying
  * workflow to the commit the deploy is actually built from — the pull
@@ -73,8 +84,8 @@ const nextConfig: NextConfig = {};
  * deployed either.
  */
 export default withSentryConfig(withNextIntl(nextConfig), {
-	org: "axross",
-	project: "tsuzuri",
+	org: process.env.SENTRY_ORG,
+	project: process.env.SENTRY_PROJECT,
 	authToken: process.env.SENTRY_AUTH_TOKEN,
 	release: {
 		name: process.env.SENTRY_RELEASE,
