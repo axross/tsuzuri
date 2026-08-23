@@ -189,6 +189,13 @@ jobs:
       # inside the pinned `wrangler` package rather than assumed, since
       # `wrangler` itself has no CLI subcommand that lists every Worker in
       # the account. A script's `id` in that response is its name.
+      # -sSf makes curl itself fail (non-zero exit, under set -e) on a
+      # non-2xx HTTP status, and the Node script below additionally checks
+      # body.success === true before trusting body.result at all — on
+      # Cloudflare's error envelope (`result: null`), `(body.result ?? [])`
+      # would otherwise silently coerce to `[]` and this step would report
+      # the Worker gone having verified nothing. Both checks fail loudly
+      # rather than falling through to "confirmed removed".
       - name: Verify the Worker is gone
         if: steps.preflight.outputs.armed == 'true'
         env:
@@ -196,19 +203,27 @@ jobs:
           WORKER_NAME: tsuzuri-pr-${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          scripts="$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+          scripts="$(curl -sSf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts")"
           if echo "$scripts" | node -e "
             let data = '';
             process.stdin.on('data', (chunk) => { data += chunk; });
             process.stdin.on('end', () => {
               const body = JSON.parse(data);
+              if (body.success !== true) {
+                console.error('::error::Cloudflare returned success: false while listing Workers; cannot verify teardown.');
+                process.exit(2);
+              }
               const names = (body.result ?? []).map((script) => script.id);
               process.exit(names.includes(process.env.WORKER_NAME) ? 1 : 0);
             });
           "; then
-            echo "Worker $WORKER_NAME confirmed removed from the account's Worker list."
+            echo "Worker $WORKER_NAME confirmed removed from the account Worker list."
           else
-            echo "::error::Worker $WORKER_NAME still appears in the account's Worker list after teardown."
+            status=$?
+            if [ "$status" -eq 2 ]; then
+              exit 1
+            fi
+            echo "::error::Worker $WORKER_NAME still appears in the account Worker list after teardown."
             exit 1
           fi
