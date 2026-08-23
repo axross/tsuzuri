@@ -64,8 +64,41 @@ jobs:
         if: steps.preflight.outputs.armed == 'true'
         run: npm install
 
+      # `vars.NEXT_PUBLIC_SENTRY_DSN` is a repository *variable*, not a
+      # secret — a DSN is public by design, it ships inside the client
+      # bundle, see docs/conventions/security.md. It is still absent on a
+      # fork pull request the same way the Cloudflare secrets are, but the
+      # preflight guard above already keeps this step from running in that
+      # case. `::warning::` rather than a failure: a missing DSN degrades
+      # the deployed client to reporting nothing, it does not break the
+      # build, and this is what makes that otherwise-silent case visible in
+      # the Actions log instead of being discovered months later. Never
+      # prints the value itself, only whether it was present.
+      - name: Warn if the client Sentry DSN is not configured
+        if: steps.preflight.outputs.armed == 'true' && vars.NEXT_PUBLIC_SENTRY_DSN == ''
+        run: echo "::warning::NEXT_PUBLIC_SENTRY_DSN is not set as a repository variable — this preview's client bundle will ship with no DSN and report nothing to Sentry."
+
+      # SENTRY_AUTH_TOKEN and NEXT_PUBLIC_SENTRY_DSN are the same two
+      # repository-level values production's Build step below already
+      # carries (see production-deployment.yaml and README.md): the token
+      # arms the client source-map upload so a preview's client errors
+      # symbolicate the same way production's do, and the DSN is what lets
+      # the deployed client bundle report at all — Next.js inlines it at
+      # build time, so it has to be present here rather than only at
+      # runtime. SENTRY_RELEASE is this pull request's head SHA, the same
+      # commit the "Comment the preview URL" step below reports — not
+      # `github.sha`, which on a `pull_request` trigger is a merge commit
+      # rather than a commit on this branch. `next.config.ts`'s explicit
+      # `release.name` reads this to tag both the browser bundle and the
+      # source-map upload; the Wrangler config templated below carries the
+      # same value to the deployed Worker, so a preview's client and server
+      # events correlate under one release in Sentry.
       - name: Build
         if: steps.preflight.outputs.armed == 'true'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_RELEASE: ${{ github.event.pull_request.head.sha }}
         run: npx opennextjs-cloudflare build
 
       # Templates a per-pull-request copy of wrangler.jsonc rather than
@@ -83,6 +116,7 @@ jobs:
         if: steps.preflight.outputs.armed == 'true'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           node <<'EOF'
@@ -97,8 +131,15 @@ jobs:
           config.name = `tsuzuri-pr-${process.env.PR_NUMBER}`;
           // Overrides the production value wrangler.jsonc's `vars` sets, so a
           // preview deploy's Sentry events are distinguishable from
-          // production's rather than sharing its environment (PR-03).
-          config.vars = { ...config.vars, SENTRY_ENVIRONMENT: "preview" };
+          // production's rather than sharing its environment (PR-03), and
+          // carries the same release identifier the Build step above already
+          // gave the client half (see next.config.ts), so this preview's
+          // client and server events agree on one release in Sentry.
+          config.vars = {
+            ...config.vars,
+            SENTRY_ENVIRONMENT: "preview",
+            SENTRY_RELEASE: process.env.PR_HEAD_SHA,
+          };
           writeFileSync("wrangler.preview.json", `${JSON.stringify(config, null, 2)}\n`);
           EOF
 
