@@ -1,6 +1,30 @@
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+
+/**
+ * Resolves Cloudflare bindings (`env`, `cf`, `ctx`) through Wrangler under
+ * `next dev`, so `getCloudflareContext()` works in development instead of
+ * throwing — confirmed by reading the installed package
+ * (`@opennextjs/cloudflare`'s `dist/api/cloudflare-context.js`):
+ * `getCloudflareContext` throws `initOpenNextCloudflareForDevErrorMsg`,
+ * telling the caller to add exactly this call, whenever the context was
+ * never initialized. Nothing under `src/` calls `getCloudflareContext()` yet,
+ * which is why that throw has not been hit — but the first feature that
+ * reads a Worker binding in development will hit it without this.
+ *
+ * Safe to call unconditionally from a config file a production build also
+ * loads: `initOpenNextCloudflareForDev` itself no-ops outside `next dev`'s
+ * two-process dev server — it returns immediately unless
+ * `globalThis.AsyncLocalStorage` is already set, which is how the dev server
+ * (and only the dev server) is distinguished from a `next build` process —
+ * so it makes no Wrangler call and touches nothing during
+ * `npx opennextjs-cloudflare build` or a production/preview deploy. Verified
+ * empirically: the build and `npm run dev` both still succeed with this
+ * call in place.
+ */
+initOpenNextCloudflareForDev();
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
