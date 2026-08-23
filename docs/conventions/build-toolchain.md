@@ -119,11 +119,14 @@ throw, confirmed against the Sentry project and against a local ingest
 endpoint that captured nothing while accepting a hand-posted envelope. This is
 the failure mode worth stating plainly, because it is the one nothing
 announces: an error tracker reporting nothing is indistinguishable from an
-application with no errors. Every other failure in this section fails loudly,
-at build time; this one would only have surfaced when someone needed a stack
-trace and found the project had been blind for however long it had been
-deployed. Keeping the file would not have restored server-side Sentry capture
-regardless of whether `copyTracedFiles` accepted it.
+application with no errors. The failures above in this same section at least
+stopped something visibly — a build that would not finish, a request that
+threw a `ChunkLoadError` — but this one stops nothing: the Worker starts,
+serves every request, and says nothing about the ones that threw. It would
+only have surfaced when someone needed a stack trace and found the project
+had been blind for however long it had been deployed. Keeping the file would
+not have restored server-side Sentry capture regardless of whether
+`copyTracedFiles` accepted it.
 
 Server-side capture now comes from the Worker entrypoint instead: `worker.ts`
 wraps the OpenNext handler in `@sentry/cloudflare`'s `withSentry`, configured
@@ -177,9 +180,10 @@ this host's adapter does not carry into what it deploys — is the method the
 third constraint's own measurements found the hard way: verify against a
 **deployed** instance that has served a request, not against a build or a
 type-check that merely completed. The other two constraints here fail loudly
-at build time and announce themselves; `instrumentation.ts` did not. A build
-that passed only because a missing file had been patched by hand still broke
-every request at runtime, and a build that passed in full still left
-`register()` uncalled and the error tracker silent — the one failure among
-these three that a green build and a serving deployment will not surface on
-their own.
+at build time and announce themselves; `instrumentation.ts` did not, in
+either of the two ways it broke. A build that passed only because a missing
+file had been patched by hand still broke every request at runtime — loud,
+but only once something asked the deployment to run. A build that passed in
+full left `register()` uncalled and the error tracker completely silent — the
+one failure of the three constraints above that neither a green build nor a
+serving deployment will surface on its own.
