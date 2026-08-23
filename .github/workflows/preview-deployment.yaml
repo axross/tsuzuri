@@ -196,6 +196,19 @@ jobs:
       # would otherwise silently coerce to `[]` and this step would report
       # the Worker gone having verified nothing. Both checks fail loudly
       # rather than falling through to "confirmed removed".
+      #
+      # The Node script uses one exit code per outcome rather than letting
+      # an unrelated failure fall through to the "still present" branch:
+      #   0 - Worker absent from the list (teardown worked)
+      #   1 - Worker still present in the list (teardown did not work)
+      #   2 - Cloudflare returned success: false (cannot verify either way)
+      #   3 - the script itself failed unexpectedly (e.g. a malformed body
+      #       that makes JSON.parse throw) — caught explicitly rather than
+      #       left to crash with Node's default uncaught-exception exit code
+      #       of 1, which would otherwise be indistinguishable from "Worker
+      #       still present" (exit code 1) and misreport the cause. The step
+      #       still fails either way — there is no false green — but this is
+      #       what keeps the failure message honest about what happened.
       - name: Verify the Worker is gone
         if: steps.preflight.outputs.armed == 'true'
         env:
@@ -205,25 +218,41 @@ jobs:
           set -euo pipefail
           scripts="$(curl -sSf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts")"
-          if echo "$scripts" | node -e "
+          set +e
+          echo "$scripts" | node -e "
             let data = '';
             process.stdin.on('data', (chunk) => { data += chunk; });
             process.stdin.on('end', () => {
-              const body = JSON.parse(data);
-              if (body.success !== true) {
-                console.error('::error::Cloudflare returned success: false while listing Workers; cannot verify teardown.');
-                process.exit(2);
+              try {
+                const body = JSON.parse(data);
+                if (body.success !== true) {
+                  console.error('::error::Cloudflare returned success: false while listing Workers; cannot verify teardown.');
+                  process.exit(2);
+                }
+                const names = (body.result ?? []).map((script) => script.id);
+                process.exit(names.includes(process.env.WORKER_NAME) ? 1 : 0);
+              } catch (error) {
+                console.error('::error::Verify-teardown script failed unexpectedly (' + error.message + '); cannot verify whether the Worker was removed.');
+                process.exit(3);
               }
-              const names = (body.result ?? []).map((script) => script.id);
-              process.exit(names.includes(process.env.WORKER_NAME) ? 1 : 0);
             });
-          "; then
-            echo "Worker $WORKER_NAME confirmed removed from the account Worker list."
-          else
-            status=$?
-            if [ "$status" -eq 2 ]; then
+          "
+          status=$?
+          set -e
+          case "$status" in
+            0)
+              echo "Worker $WORKER_NAME confirmed removed from the account Worker list."
+              ;;
+            1)
+              echo "::error::Worker $WORKER_NAME still appears in the account Worker list after teardown."
               exit 1
-            fi
-            echo "::error::Worker $WORKER_NAME still appears in the account Worker list after teardown."
-            exit 1
-          fi
+              ;;
+            2)
+              # Message already printed by the Node script above.
+              exit 1
+              ;;
+            *)
+              # Message already printed by the Node script above.
+              exit 1
+              ;;
+          esac
