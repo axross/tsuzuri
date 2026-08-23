@@ -95,6 +95,10 @@ jobs:
             .join("\n");
           const config = JSON.parse(withoutComments);
           config.name = `tsuzuri-pr-${process.env.PR_NUMBER}`;
+          // Overrides the production value wrangler.jsonc's `vars` sets, so a
+          // preview deploy's Sentry events are distinguishable from
+          // production's rather than sharing its environment (PR-03).
+          config.vars = { ...config.vars, SENTRY_ENVIRONMENT: "preview" };
           writeFileSync("wrangler.preview.json", `${JSON.stringify(config, null, 2)}\n`);
           EOF
 

@@ -23,5 +23,16 @@
 	// property: `{ binding: string }`).
 	"version_metadata": {
 		"binding": "CF_VERSION_METADATA"
+	},
+	// worker.ts's `withSentry` options callback sets no `environment` key, so
+	// @sentry/cloudflare's getFinalOptions
+	// (node_modules/@sentry/cloudflare/build/esm/options.js) fills it in from
+	// env.SENTRY_ENVIRONMENT automatically — confirmed by reading the
+	// installed package rather than assumed. This is the production value;
+	// the per-pull-request preview templating step in
+	// .github/workflows/preview-deployment.yaml overrides it to "preview" so
+	// the two tiers are distinguishable in Sentry.
+	"vars": {
+		"SENTRY_ENVIRONMENT": "production"
 	}
 }
