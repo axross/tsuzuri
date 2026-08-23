@@ -5,15 +5,11 @@
 	"type": "module",
 	"scripts": {
 		"dev": "next dev",
-		"build": "next build",
-		"start": "next start",
 		"format": "biome format --write .",
 		"lint": "biome check .",
 		"typecheck": "tsc --noEmit",
 		"test:unit": "vitest run",
-		"test:e2e": "playwright test",
-		"build:worker": "opennextjs-cloudflare build",
-		"deploy:worker": "opennextjs-cloudflare deploy"
+		"test:e2e": "playwright test"
 	},
 	"dependencies": {
 		"@base-ui-components/react": "1.0.0-rc.0",
