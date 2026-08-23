@@ -52,7 +52,14 @@ configured for this repository.
 
 `SENTRY_AUTH_TOKEN` gates only the client source-map upload inside the build
 (see `next.config.ts`); its absence degrades that build rather than blocking
-it, so it is not part of the preflight guard.
+it, so it is not part of the preflight guard. `SENTRY_ORG` and
+`SENTRY_PROJECT` (repository *variables*, not secrets — a Sentry org/project
+slug, not a token, key, DSN, or internal hostname, see
+[docs/conventions/security.md](../conventions/security.md)) are what
+`next.config.ts`'s `canUploadSourceMaps` check needs to attempt that upload
+at all; with either unset it warns and skips the upload rather than failing
+the build, and a dedicated step here logs an `::warning::` beforehand, the
+same shape the DSN warning below uses.
 
 The Build step also resolves `SENTRY_RELEASE` — a step immediately before it
 runs `git rev-parse HEAD` after the release step above, rather than trusting

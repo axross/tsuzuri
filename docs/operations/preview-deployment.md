@@ -90,13 +90,35 @@ lets a preview's client and server events correlate under one release in
 Sentry. `SENTRY_AUTH_TOKEN` (the same repository secret production's build
 uses) arms the source-map upload here too, so a preview's client errors
 symbolicate the same way production's do; its absence degrades the build
-rather than failing it. `NEXT_PUBLIC_SENTRY_DSN` (a repository *variable*,
-not a secret — see [docs/conventions/security.md](../conventions/security.md))
-is what lets the deployed client report to Sentry at all, since Next.js
-inlines it at build time; its absence is logged as an `::warning::` by a
-dedicated step immediately before the build runs, rather than failing it, so
-a missing or misspelled variable shows up in the Actions log instead of
-being discovered only when a preview's errors go unreported.
+rather than failing it. `SENTRY_ORG` and `SENTRY_PROJECT` (repository
+*variables*, the Sentry org/project slug rather than a credential — see
+[docs/conventions/security.md](../conventions/security.md)) are what
+`next.config.ts`'s `canUploadSourceMaps` check needs to attempt that upload
+at all; with either unset it warns and skips the upload rather than failing
+the build, and a dedicated step here logs an `::warning::` beforehand, the
+same shape the DSN warning below uses. `NEXT_PUBLIC_SENTRY_DSN` (a repository
+*variable*, not a secret) is what lets the deployed client report to Sentry
+at all, since Next.js inlines it at build time; its absence is logged as an
+`::warning::` by a dedicated step immediately before the build runs, rather
+than failing it, so a missing or misspelled variable shows up in the Actions
+log instead of being discovered only when a preview's errors go unreported.
+
+The templating step that produces `wrangler.preview.json` also carries
+`SENTRY_DSN` into the deployed Worker's `vars`, reusing
+`NEXT_PUBLIC_SENTRY_DSN`'s value rather than a dedicated secret — a DSN is
+public by design, it already ships inside the client bundle the Build step
+above produces — and as a plain `var` rather than a Wrangler secret, because
+each pull request deploys a distinct Worker script (`tsuzuri-pr-<number>`)
+that `wrangler` creates fresh on every deploy, so no secret pre-set on any
+other script name ever reaches it (see `worker.ts`'s own comment on the
+`Env` type). With `NEXT_PUBLIC_SENTRY_DSN` unset, the templating script
+omits the `SENTRY_DSN` key from the written config entirely rather than
+writing `null`, so the deployed Worker gets no binding and `worker.ts`'s
+existing dsn-unset path applies unchanged: it starts, serves requests, and
+reports nothing. This is what makes the release-correlation claim above true
+in practice rather than only in principle — before this, no preview Worker
+carried a DSN at all, so there were no server-side events for a preview's
+client events to correlate with.
 
 Closing the pull request tears the Worker down. `wrangler delete` was
 measured (issue #70, and reproduced exactly by the 2026-08-23 measurement
