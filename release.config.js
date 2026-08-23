@@ -11,12 +11,48 @@
  * semantic-release resolves that as the previous version and continues from
  * there instead of publishing `1.0.0` with no tag to read.
  */
+
+/**
+ * Neither `@semantic-release/commit-analyzer` nor
+ * `@semantic-release/release-notes-generator` is given a `preset` below, so
+ * both default to `conventional-changelog-angular`, whose `headerPattern`
+ * (`/^(\w*)(?:\((.*)\))?: (.*)$/`) has no `!` in it and so does not match a
+ * bare-`!` breaking-change header at all — a form
+ * `.claude/skills/conventional-commits/SKILL.md` explicitly sanctions
+ * (`feat(api)!: drop support for Node 18`, no `BREAKING CHANGE:` footer).
+ * Left unfixed, that commit's `type` comes back unparsed and its `notes`
+ * come back empty, so neither the custom `{ breaking: true, release: "minor" }`
+ * rule below nor any shipped default ever matches it: it contributes no
+ * release type at all, rather than the minor bump `!` is supposed to mean.
+ *
+ * `breakingHeaderPattern` is `conventional-commits-parser`'s own mechanism
+ * for this, not a bespoke workaround: when set, the parser tries it before
+ * `headerPattern` for every commit, so a `!` header is parsed by it instead
+ * (still filling `type`/`scope`/`subject` through the same
+ * `headerCorrespondence`, since the three capture groups here match its
+ * default order), and separately synthesizes a `BREAKING CHANGE` note from
+ * the header's own description whenever no explicit `BREAKING CHANGE:`
+ * footer already supplied one (`commit.notes.length === 0` at that point) —
+ * confirmed by reading `conventional-commits-parser`'s `CommitParser.parse`
+ * (`parseHeader`, `parseBreakingHeader`) rather than assumed. A header with
+ * no `!` doesn't match this pattern at all, so `fix:`, `feat:`, and
+ * `BREAKING CHANGE:`-footer commits parse exactly as they did before.
+ *
+ * Passed to both plugins that parse commits — analysis and release-notes
+ * generation — so the changelog doesn't inherit the same blind spot the
+ * analyzer had.
+ */
+const parserOpts = {
+	breakingHeaderPattern: /^(\w*)(?:\((.*)\))?!: (.*)$/,
+};
+
 export default {
 	branches: ["main"],
 	plugins: [
 		[
 			"@semantic-release/commit-analyzer",
 			{
+				parserOpts,
 				releaseRules: [
 					// Every version this project releases stays inside 0.x until
 					// the maintainer says otherwise (issue #79), including a
@@ -37,7 +73,7 @@ export default {
 				],
 			},
 		],
-		"@semantic-release/release-notes-generator",
+		["@semantic-release/release-notes-generator", { parserOpts }],
 		"@semantic-release/changelog",
 		[
 			"@semantic-release/npm",
