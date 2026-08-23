@@ -43,7 +43,13 @@ match it by hand.
 
 1. Install dependencies: `npm install`
 2. Start developing: `npm run dev`
-3. Production build and start: `npm run build`, then `npm run start`
+
+Building and deploying the Worker are not scripts a contributor runs day to
+day — the preview and production pipelines invoke `npx opennextjs-cloudflare
+build` and `npx opennextjs-cloudflare deploy` directly, since a workflow is
+their only other caller. Run those same commands by hand to build or deploy a
+personal or throwaway Worker; see [Testing](#testing) below for what each
+does and what deploying needs.
 
 No service, database, or credential is required to run the application
 locally. Every integration is inert until it is configured: with no
@@ -148,10 +154,11 @@ complete on its own.
 
 Unit tests under Vitest cover the transformations — parsing front matter,
 deriving a media path, building a commit payload, validating configuration —
-and never reach the network. End-to-end tests under Playwright drive a
-production build in Chromium and cover the journeys catalogued in
-[`e2e/scenarios.md`](./e2e/scenarios.md), which is what this project counts
-coverage against rather than a line percentage.
+and never reach the network. End-to-end tests under Playwright build the
+OpenNext output and drive it through `wrangler dev` in Chromium — the Worker
+that actually gets deployed, rather than a `next start` build — and cover the
+journeys catalogued in [`e2e/scenarios.md`](./e2e/scenarios.md), which is what
+this project counts coverage against rather than a line percentage.
 [docs/conventions/testing.md](./docs/conventions/testing.md) states which suite
 a given test belongs in.
 
@@ -166,8 +173,6 @@ before opening a pull request that touches a rendered surface.
 | Type-check | `npm run typecheck` |
 | Unit tests | `npm run test:unit` |
 | E2E tests | `npm run test:e2e` |
-| Build the Worker | `npm run build:worker` |
-| Deploy the Worker | `npm run deploy:worker` |
 
 This table is the authoritative list of the project's commands, for human
 contributors and agents alike. Run format and lint after every change, and the
@@ -175,16 +180,16 @@ suites relevant to the changed surface before opening a pull request; the
 `software-development` skill owns why, and [`AGENTS.md`](./AGENTS.md) requires
 reading this file before running any of them.
 
-The last two are not gating checks; they exist for deploying to Cloudflare
-Workers. `npm run build:worker` runs the OpenNext CLI (`opennextjs-cloudflare
-build`), which runs `next build` and then transforms `.next/standalone` into
-the `.open-next/` directory Wrangler deploys — the same build both deployment
-pipelines run in CI. `npm run deploy:worker` runs the OpenNext CLI's `deploy`
-command, which deploys an *already-built* `.open-next/` output through
-Wrangler — run `build:worker` first, as both pipelines do. It needs
-`CLOUDFLARE_API_TOKEN`
-and `CLOUDFLARE_ACCOUNT_ID` in the environment, so a contributor runs it
-directly only to push a personal or throwaway Worker for manual testing — the
+Building and deploying the Worker are not in this table: they have no human
+caller, only the deployment workflows, so they are workflow steps rather than
+scripts. `npx opennextjs-cloudflare build` runs `next build` and then
+transforms `.next/standalone` into the `.open-next/` directory Wrangler
+deploys — the same build both deployment pipelines and the end-to-end suite
+run. `npx opennextjs-cloudflare deploy` deploys an *already-built*
+`.open-next/` output through Wrangler — run the build command first, as both
+pipelines do. Deploying needs `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` in the environment, so a contributor runs it directly
+only to push a personal or throwaway Worker for manual testing — the
 pipelines are what deploy the preview and production Workers day to day.
 
 If a required command cannot be run, say so — naming the command, the reason,

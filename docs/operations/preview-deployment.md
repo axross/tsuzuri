@@ -47,11 +47,13 @@ Nothing else has to be configured. The workflow uses the job's own
 ## What a Run Does
 
 Opening, updating, or reopening a pull request builds the application through
-`npm run build:worker`, templates a per-pull-request copy of `wrangler.jsonc`
-whose `name` is `tsuzuri-pr-<number>`, and deploys it through the
-`@opennextjs/cloudflare` CLI (`npm run deploy:worker`) rather than through
-`wrangler deploy` directly — so that any cache-population step a future
-binding set requires runs rather than being silently skipped, per issue #70.
+`npx opennextjs-cloudflare build`, templates a per-pull-request copy of
+`wrangler.jsonc` whose `name` is `tsuzuri-pr-<number>`, and deploys it through
+the `@opennextjs/cloudflare` CLI (`npx opennextjs-cloudflare deploy`) rather
+than through `wrangler deploy` directly — so that any cache-population step a
+future binding set requires runs rather than being silently skipped, per
+issue #70. Both are invoked directly rather than through an npm script: a
+workflow is each one's only caller, so neither lives in `package.json`.
 The config is templated per pull request rather than deployed with a bare
 `--name` override, because `--name` renames the script without rewriting a
 `WORKER_SELF_REFERENCE` service binding that carries the old name; this tree

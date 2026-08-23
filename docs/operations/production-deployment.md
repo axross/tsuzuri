@@ -36,9 +36,11 @@ Dispatching the workflow from the default branch does two things, in order:
    still runs, because deploying is what the operator dispatched this
    workflow to do.
 2. **Deploys the default branch's head to the production Worker**, through
-   `npm run build:worker` and then `npm run deploy:worker`. Unlike the
-   preview pipeline, production is one fixed Worker — `wrangler.jsonc`'s own
-   `name` ("tsuzuri") is used as-is, with nothing templated per run.
+   `npx opennextjs-cloudflare build` and then `npx opennextjs-cloudflare
+   deploy` — invoked directly rather than through an npm script, since a
+   workflow is each one's only caller. Unlike the preview pipeline,
+   production is one fixed Worker — `wrangler.jsonc`'s own `name` ("tsuzuri")
+   is used as-is, with nothing templated per run.
 
 Only the deploy half is preflight-gated on `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`, the same two secrets and the same step-level

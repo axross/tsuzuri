@@ -15,9 +15,13 @@ against `next@16.3.1`, and the adapter cases additionally against
 `next build` runs on Turbopack, Next.js 16's own default, unchanged by the
 move to Cloudflare. `@opennextjs/cloudflare` then transforms the resulting
 `.next/standalone` into `.open-next/`, which is what `wrangler.jsonc`
-deploys. `npm run build:worker` runs both steps; see
-[the commands table in `README.md`](../../README.md#testing) for what it
-and `deploy:worker` do.
+deploys. `npx opennextjs-cloudflare build` runs both steps; it is a workflow
+step rather than an npm script, since a workflow is its only human-adjacent
+caller — see [the `README.md` testing
+section](../../README.md#testing) for what it and `deploy` do and where each
+is invoked from. `open-next.config.ts`'s `buildCommand` names the exact `next
+build` invocation to run, since no `build` script exists in `package.json`
+for the adapter's own default (`` `${packager} run build` ``) to find.
 
 One consequence of the adapter's shape reaches this project's own
 `tsconfig.json`: the Worker's entrypoint, `worker.ts`, imports
