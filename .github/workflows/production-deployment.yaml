@@ -123,19 +123,34 @@ jobs:
         if: steps.preflight.outputs.armed == 'true' && vars.NEXT_PUBLIC_SENTRY_DSN == ''
         run: echo "::warning::NEXT_PUBLIC_SENTRY_DSN is not set as a repository variable — this build's client bundle will ship with no DSN and report nothing to Sentry."
 
+      # SENTRY_ORG/SENTRY_PROJECT are also repository variables, not
+      # secrets — a Sentry org/project slug, not a token, key, DSN, or
+      # internal hostname (see docs/conventions/security.md). next.config.ts
+      # passes them explicitly to withSentryConfig; with either unset the
+      # source-map upload is silently skipped rather than attempted, so this
+      # warns the same way the DSN warning above does, and for the same
+      # reason: a missing or misspelled variable belongs in the Actions log,
+      # not discovered only when a stack trace won't symbolicate.
+      - name: Warn if the Sentry org/project is not configured
+        if: steps.preflight.outputs.armed == 'true' && (vars.SENTRY_ORG == '' || vars.SENTRY_PROJECT == '')
+        run: echo "::warning::SENTRY_ORG and/or SENTRY_PROJECT is not set as a repository variable — this build's source-map upload will be skipped."
+
       # SENTRY_AUTH_TOKEN gates only the client source-map upload inside this
       # build (see next.config.ts); its absence degrades the build rather
       # than blocking it, so it is not part of the preflight guard above.
-      # SENTRY_RELEASE is the commit resolved above, read by next.config.ts's
-      # explicit `release.name` to tag both the browser bundle and the
-      # source-map upload — the Deploy step below hands the Worker the same
-      # value, so this deploy's client and server events correlate under one
-      # release in Sentry.
+      # SENTRY_ORG/SENTRY_PROJECT are what canUploadSourceMaps needs to
+      # attempt the upload at all. SENTRY_RELEASE is the commit resolved
+      # above, read by next.config.ts's explicit `release.name` to tag both
+      # the browser bundle and the source-map upload — the Deploy step below
+      # hands the Worker the same value, so this deploy's client and server
+      # events correlate under one release in Sentry.
       - name: Build
         if: steps.preflight.outputs.armed == 'true'
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           SENTRY_RELEASE: ${{ steps.release-sha.outputs.sha }}
         run: npx opennextjs-cloudflare build
 

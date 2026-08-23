@@ -78,14 +78,28 @@ jobs:
         if: steps.preflight.outputs.armed == 'true' && vars.NEXT_PUBLIC_SENTRY_DSN == ''
         run: echo "::warning::NEXT_PUBLIC_SENTRY_DSN is not set as a repository variable — this preview's client bundle will ship with no DSN and report nothing to Sentry."
 
-      # SENTRY_AUTH_TOKEN and NEXT_PUBLIC_SENTRY_DSN are the same two
-      # repository-level values production's Build step below already
-      # carries (see production-deployment.yaml and README.md): the token
-      # arms the client source-map upload so a preview's client errors
-      # symbolicate the same way production's do, and the DSN is what lets
-      # the deployed client bundle report at all — Next.js inlines it at
-      # build time, so it has to be present here rather than only at
-      # runtime. SENTRY_RELEASE is this pull request's head SHA, the same
+      # SENTRY_ORG/SENTRY_PROJECT are also repository variables, not
+      # secrets — a Sentry org/project slug, not a token, key, DSN, or
+      # internal hostname (see docs/conventions/security.md). next.config.ts
+      # passes them explicitly to withSentryConfig; with either unset the
+      # source-map upload is silently skipped rather than attempted, so this
+      # warns the same way the DSN warning above does, and for the same
+      # reason: a missing or misspelled variable belongs in the Actions log,
+      # not discovered only when a stack trace won't symbolicate.
+      - name: Warn if the Sentry org/project is not configured
+        if: steps.preflight.outputs.armed == 'true' && (vars.SENTRY_ORG == '' || vars.SENTRY_PROJECT == '')
+        run: echo "::warning::SENTRY_ORG and/or SENTRY_PROJECT is not set as a repository variable — this preview's source-map upload will be skipped."
+
+      # SENTRY_AUTH_TOKEN, NEXT_PUBLIC_SENTRY_DSN, SENTRY_ORG, and
+      # SENTRY_PROJECT are the same repository-level values production's
+      # Build step below already carries (see production-deployment.yaml and
+      # README.md): the token arms the client source-map upload so a
+      # preview's client errors symbolicate the same way production's do,
+      # the DSN is what lets the deployed client bundle report at all —
+      # Next.js inlines it at build time, so it has to be present here
+      # rather than only at runtime — and org/project are what
+      # canUploadSourceMaps (next.config.ts) needs to attempt the upload at
+      # all. SENTRY_RELEASE is this pull request's head SHA, the same
       # commit the "Comment the preview URL" step below reports — not
       # `github.sha`, which on a `pull_request` trigger is a merge commit
       # rather than a commit on this branch. `next.config.ts`'s explicit
@@ -98,6 +112,8 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           SENTRY_RELEASE: ${{ github.event.pull_request.head.sha }}
         run: npx opennextjs-cloudflare build
 
@@ -117,6 +133,7 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
         run: |
           set -euo pipefail
           node <<'EOF'
@@ -135,10 +152,21 @@ jobs:
           // carries the same release identifier the Build step above already
           // gave the client half (see next.config.ts), so this preview's
           // client and server events agree on one release in Sentry.
+          // SENTRY_DSN reuses NEXT_PUBLIC_SENTRY_DSN's value rather than a
+          // dedicated secret — a DSN is public by design, it already ships
+          // inside the client bundle (see docs/conventions/security.md) —
+          // and is a plain `var` rather than a Wrangler secret because each
+          // pull request deploys a distinct Worker script that no pre-set
+          // secret reaches (see worker.ts). With the repository variable
+          // unset, process.env.NEXT_PUBLIC_SENTRY_DSN is undefined and
+          // JSON.stringify omits the key entirely below (verified), so the
+          // Worker simply gets no SENTRY_DSN binding and worker.ts's
+          // existing dsn-unset path applies unchanged.
           config.vars = {
             ...config.vars,
             SENTRY_ENVIRONMENT: "preview",
             SENTRY_RELEASE: process.env.PR_HEAD_SHA,
+            SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
           };
           writeFileSync("wrangler.preview.json", `${JSON.stringify(config, null, 2)}\n`);
           EOF

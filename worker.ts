@@ -15,6 +15,20 @@ import handler, {
 export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
 
 type Env = {
+	// Sourced differently per tier, asymmetrically and deliberately.
+	// Production sets this as a Wrangler *secret*, out of band from both
+	// workflows and from wrangler.jsonc's own `vars` — an operator runs
+	// `wrangler secret put SENTRY_DSN` once, by hand (see
+	// docs/operations/production-deployment.md), because a secret survives
+	// every subsequent `wrangler deploy` where a dashboard variable would be
+	// silently erased. Preview cannot use that same mechanism: each pull
+	// request deploys a distinct Worker script (`tsuzuri-pr-<number>`) that
+	// wrangler creates fresh, so no secret pre-set on any other script name
+	// ever reaches it. The preview pipeline instead templates this as a
+	// plain `var` into wrangler.preview.json, reusing the
+	// `NEXT_PUBLIC_SENTRY_DSN` repository variable's value — safe to do
+	// because a DSN is public by design (see docs/conventions/security.md);
+	// see docs/operations/preview-deployment.md.
 	SENTRY_DSN?: string;
 	// Not declared here as a static wrangler.jsonc `vars` entry — it changes
 	// per deploy, so it can't be. Each deploying workflow supplies it
