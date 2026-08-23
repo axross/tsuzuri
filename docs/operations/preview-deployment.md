@@ -25,15 +25,29 @@ same green no-op rather than an error.
 An operator with access to both the repository and the Cloudflare account
 does this once:
 
-1. Create a Cloudflare API token scoped to what this pipeline actually needs.
-   Deploying and tearing down want different scopes — teardown additionally
-   reaches Workers KV Storage, to verify a script is really gone rather than
-   trusting a command's exit code (below) — so this project takes **the union
-   in one token** rather than minting two: **Workers Scripts** (Edit) for
-   building, deploying, and listing Workers, and **Workers KV Storage**
-   (Edit) for what teardown additionally touches. Minting two narrower tokens
-   instead is a reasonable alternative an operator MAY take; this project
-   just doesn't require it.
+1. Create a Cloudflare API token scoped to what this pipeline actually needs:
+   **Workers Scripts** (Edit) for building, deploying, and listing Workers,
+   and **Workers KV Storage** (Edit) for what teardown additionally touches.
+   **This project takes the union in one token, and the union is required
+   rather than merely cautious** — narrowing it makes teardown exit 1 on
+   every pull-request close. That is a measured fact, not an inherited
+   caution: on 2026-08-23, against a real deployed throwaway Worker binding
+   no KV namespace at all (only `ASSETS` and `CF_VERSION_METADATA`), a token
+   carrying **Workers Scripts: Edit and nothing else** — KV deliberately
+   withheld, and confirmed withheld because listing KV namespaces returned
+   `Authentication error [code: 10000]` — deployed the Worker successfully,
+   and then `wrangler delete --force` **exited 1**, with `A request to the
+   Cloudflare API (/accounts/{id}/storage/kv/namespaces) failed`, even
+   though the Worker was **in fact deleted**, confirmed absent from the
+   account's Worker list immediately afterwards. So `wrangler delete`
+   enumerates KV namespaces **unconditionally** — independently of whether
+   the Worker being deleted binds any KV namespace at all, which this one
+   didn't. This is exactly why teardown (below) verifies deletion against
+   the account's Worker list instead of trusting `wrangler delete`'s exit
+   code: that exit code fails on every teardown unless the token can list
+   KV, whether or not the deletion actually worked. **Do not narrow this
+   token's scope** — minting two narrower tokens instead would make
+   teardown fail its exit-code check on every run.
 2. Add two repository secrets under Settings → Secrets and variables →
    Actions:
    - `CLOUDFLARE_API_TOKEN` — the token from step 1
@@ -65,14 +79,16 @@ SHA it was built from — rather than editing the previous one, so the thread
 reads as a history of what was deployed when.
 
 Closing the pull request tears the Worker down. `wrangler delete` was
-measured (issue #70) exiting non-zero after having already deleted the
-script, so its exit code is not trusted: teardown instead calls Cloudflare's
-"List Workers" API (`GET /accounts/{account_id}/workers/scripts`, the same
-endpoint `wrangler` itself uses for this) and fails only if the Worker's name
-still appears in the account's Worker list — that is the actual pass/fail
-gate, per the same spike (issue #70), which is also where the Workers KV
-Storage scope named above comes from: it recorded that tearing a Worker down
-reaches further than deploying one does.
+measured (issue #70, and reproduced exactly by the 2026-08-23 measurement
+above) exiting non-zero after having already deleted the script, so its exit
+code is not trusted: teardown instead calls Cloudflare's "List Workers" API
+(`GET /accounts/{account_id}/workers/scripts`, the same endpoint `wrangler`
+itself uses for this) and fails only if the Worker's name still appears in
+the account's Worker list — that is the actual pass/fail gate. This is the
+same design the Workers KV Storage scope above exists for: `wrangler delete`
+enumerates KV namespaces on every deletion regardless of the token's scope,
+so the verify-by-Worker-list gate is what actually decides pass or fail
+rather than an exit code that can be non-zero on a deletion that worked.
 
 ## Reading a Preview That Looks Wrong
 
