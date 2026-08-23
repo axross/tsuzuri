@@ -130,6 +130,25 @@ and reports nothing — no error, no warning, no network attempt — which is th
 deliberate inert-when-unconfigured shape `worker.ts`'s own comment states,
 not a bug in the pipeline.
 
+**This has to be a Wrangler *secret*, not a dashboard *variable*, or a later
+deploy silently erases it.** `wrangler.jsonc` carries no `SENTRY_DSN` entry
+in its own `vars` — deliberately, since a value the operator sets by hand has
+no business in a file this repository commits — and by default Wrangler
+treats its configuration file as the sole source of truth for a Worker's
+environment: the pinned `wrangler@4.125.0`'s own `config-schema.json`
+documents its `keep_vars` option with *"By default, the Wrangler
+configuration file is the source of truth for your environment
+configuration, like a terraform file. If you change your vars in the
+dashboard, wrangler will override/delete them on its next deploy."* A
+`SENTRY_DSN` set as a plaintext dashboard **Variable** instead of a
+**Secret** was measured on this account as binding type `plain_text` —
+exactly the kind of dashboard-set value that sentence describes — so it
+would be silently wiped the next time this pipeline deploys, and the Worker
+would go quiet with none of the loud signals above: no error, no warning, no
+failed deploy, just a DSN that used to work and now doesn't. `wrangler secret
+put` does not go through this erosion; a secret set this way survives every
+subsequent `wrangler deploy` this pipeline runs.
+
 **4. Leave Cloudflare's Workers Builds GitHub integration disconnected from
 this repository.** Workers Builds can build and deploy a Worker straight from
 a GitHub push, entirely outside this workflow. Connecting it for the
