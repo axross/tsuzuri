@@ -104,7 +104,7 @@ jobs:
         if: steps.preflight.outputs.armed == 'true'
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: npm run build:worker
+        run: npx opennextjs-cloudflare build
 
       # wrangler.jsonc's own `name` ("tsuzuri") is used as-is: unlike the
       # preview pipeline, production is one fixed Worker, so there is nothing
@@ -114,4 +114,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npm run deploy:worker
+        run: npx opennextjs-cloudflare deploy
