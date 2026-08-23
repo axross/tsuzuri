@@ -16,12 +16,30 @@ export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
 
 type Env = {
 	SENTRY_DSN?: string;
-	// Bound in wrangler.jsonc as `version_metadata`. Read automatically by
-	// @sentry/cloudflare's own `getFinalOptions` — this file never reads it
-	// directly — to fill `release` on every event, since the options
-	// callback below does not set one itself. `id` is the only field that
-	// matters here; `getFinalOptions` checks for it before trusting the
-	// binding at all.
+	// Not declared here as a static wrangler.jsonc `vars` entry — it changes
+	// per deploy, so it can't be. Each deploying workflow supplies it
+	// instead: the preview pipeline templates it into wrangler.preview.json
+	// alongside SENTRY_ENVIRONMENT, and the production one appends `--var`
+	// directly to its `opennextjs-cloudflare deploy` invocation, forwarded
+	// straight through to the underlying `wrangler deploy` (see both
+	// workflow files). Read automatically
+	// by @sentry/cloudflare's own `getFinalOptions` — this file never reads
+	// it directly — to fill `release` on every event, since the options
+	// callback below does not set one itself. This is what makes a
+	// server-side event's release agree with a client-side one's: both are
+	// ultimately the same commit SHA the workflow resolved for this deploy,
+	// see next.config.ts.
+	SENTRY_RELEASE?: string;
+	// Bound in wrangler.jsonc as `version_metadata`. This is a
+	// Cloudflare-assigned Worker Version UUID, not a build identifier this
+	// repository controls — it has no relationship to the commit SHA
+	// SENTRY_RELEASE above carries, and the two are not interchangeable.
+	// getFinalOptions reads it only as a fallback, when env.SENTRY_RELEASE
+	// is absent (checked first): a Worker deployed by hand with
+	// `wrangler deploy`, bypassing the workflows that set SENTRY_RELEASE,
+	// still gets *some* release value on its events rather than none. `id`
+	// is the only field that matters here; `getFinalOptions` checks for it
+	// before trusting the binding at all.
 	CF_VERSION_METADATA?: { id: string };
 };
 
@@ -43,10 +61,14 @@ type Env = {
  *
  * The options callback below sets no `release`: `@sentry/cloudflare`'s own
  * `getFinalOptions` (node_modules/@sentry/cloudflare/build/esm/options.js)
- * fills it from `env.CF_VERSION_METADATA.id` whenever the returned options
- * omit the key, and `wrangler.jsonc` binds that Worker Version metadata for
- * exactly this — so every server-side event carries the same build
- * identifier the client half already does via `withSentryConfig`.
+ * fills it in, preferring `env.SENTRY_RELEASE` and falling back to
+ * `env.CF_VERSION_METADATA.id` only when that's absent — see the `Env` type
+ * above for what each binding actually is and where it comes from. It is
+ * `SENTRY_RELEASE`, not the version-metadata fallback, that makes a
+ * server-side event's `release` agree with a client-side one's: both
+ * pipelines resolve one commit SHA per deploy and hand it to both halves
+ * (see `next.config.ts` for the client half), rather than each half
+ * auto-detecting a value of its own that happens to agree.
  */
 export default Sentry.withSentry(
 	(env: Env) => ({

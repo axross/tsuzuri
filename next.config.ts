@@ -51,9 +51,32 @@ const nextConfig: NextConfig = {};
  * `debugIdUploadPlugin`'s own writeBundle hook catches an upload error and
  * logs it (`handleRecoverableError(e, false)`, throwByDefault: false),
  * rather than re-throwing it into the build.
+ *
+ * `release.name` is read from `SENTRY_RELEASE`, set by each deploying
+ * workflow to the commit the deploy is actually built from — the pull
+ * request's head SHA in the preview pipeline, the (possibly
+ * semantic-release-advanced) HEAD in the production one; see both workflow
+ * files. Passed explicitly rather than left to `withSentryConfig`'s own
+ * fallback chain, so this one line is where a reader confirms client and
+ * server share a source: `@sentry/nextjs`'s `resolveReleaseName`
+ * (`getFinalConfigObjectUtils.js`) resolves this same string for both the
+ * value the browser bundle reports at runtime and the value the source-map
+ * upload is filed under, which is what lets a client event and its source
+ * map find each other in Sentry. `worker.ts`'s `env.SENTRY_RELEASE` binding
+ * — set by the same two workflows — is what makes the server half agree
+ * with this one; see `worker.ts` and `wrangler.jsonc`. With `SENTRY_RELEASE`
+ * unset (a local build, or a workflow run before Cloudflare/Sentry secrets
+ * exist), `resolveReleaseName` falls through to `getSentryRelease()` (the
+ * same env var, still unset) and then `getGitRevision()`
+ * (`git rev-parse HEAD`), so the build still succeeds and still reports a
+ * release — just not one guaranteed to match a server that was never
+ * deployed either.
  */
 export default withSentryConfig(withNextIntl(nextConfig), {
 	org: "axross",
 	project: "tsuzuri",
 	authToken: process.env.SENTRY_AUTH_TOKEN,
+	release: {
+		name: process.env.SENTRY_RELEASE,
+	},
 });
