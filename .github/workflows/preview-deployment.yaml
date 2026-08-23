@@ -81,11 +81,16 @@ jobs:
       # SENTRY_ORG/SENTRY_PROJECT are also repository variables, not
       # secrets — a Sentry org/project slug, not a token, key, DSN, or
       # internal hostname (see docs/conventions/security.md). next.config.ts
-      # passes them explicitly to withSentryConfig; with either unset the
-      # source-map upload is silently skipped rather than attempted, so this
-      # warns the same way the DSN warning above does, and for the same
-      # reason: a missing or misspelled variable belongs in the Actions log,
-      # not discovered only when a stack trace won't symbolicate.
+      # passes them explicitly to withSentryConfig; project is unconditionally
+      # required for canUploadSourceMaps (@sentry/bundler-plugin-core) to
+      # attempt the upload, and org is too unless SENTRY_AUTH_TOKEN is
+      # org-scoped (starts with sntrys_, which already carries the org) — with
+      # either required one unset the upload is silently skipped rather than
+      # attempted, so this warns the same way the DSN warning above does, and
+      # for the same reason: a missing or misspelled variable belongs in the
+      # Actions log, not discovered only when a stack trace won't
+      # symbolicate. This guard doesn't distinguish an org-scoped token, so it
+      # can warn even when the upload would still succeed.
       - name: Warn if the Sentry org/project is not configured
         if: steps.preflight.outputs.armed == 'true' && (vars.SENTRY_ORG == '' || vars.SENTRY_PROJECT == '')
         run: echo "::warning::SENTRY_ORG and/or SENTRY_PROJECT is not set as a repository variable — this preview's source-map upload will be skipped."

@@ -57,9 +57,14 @@ it, so it is not part of the preflight guard. `SENTRY_ORG` and
 slug, not a token, key, DSN, or internal hostname, see
 [docs/conventions/security.md](../conventions/security.md)) are what
 `next.config.ts`'s `canUploadSourceMaps` check needs to attempt that upload
-at all; with either unset it warns and skips the upload rather than failing
-the build, and a dedicated step here logs an `::warning::` beforehand, the
-same shape the DSN warning below uses.
+at all. `SENTRY_PROJECT` is unconditionally required; `SENTRY_ORG` is
+required too unless `SENTRY_AUTH_TOKEN` is org-scoped (starts with
+`sntrys_`, which already carries the org). With a required one unset it
+warns and skips the upload rather than failing the build, and a dedicated
+step here logs an `::warning::` beforehand, the same shape the DSN warning
+below uses — though the guard checks both variables regardless of the
+token's scope, so it can warn even when an org-scoped token would still let
+the upload succeed with `SENTRY_ORG` unset.
 
 The Build step also resolves `SENTRY_RELEASE` — a step immediately before it
 runs `git rev-parse HEAD` after the release step above, rather than trusting

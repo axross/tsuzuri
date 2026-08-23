@@ -38,11 +38,13 @@ const nextConfig: NextConfig = {};
  * `@sentry/bundler-plugins`' own source rather than assumed, since neither
  * vendor's documentation states it.
  *
- * `org` and `project` are also required for `canUploadSourceMaps`
- * (`@sentry/bundler-plugin-core`) to attempt the upload at all — with either
- * missing it warns "No org/project provided. Will not upload source maps."
- * and the build succeeds anyway, which is how the upload went silently
- * unconfigured before this. They're a Sentry organization and project slug,
+ * `project` is unconditionally required for `canUploadSourceMaps`
+ * (`@sentry/bundler-plugin-core`) to attempt the upload at all; `org` is
+ * required too unless `authToken` is org-scoped (starts with `sntrys_`,
+ * which already carries the org) — with either missing when required it
+ * warns "No org/project provided. Will not upload source maps." and the
+ * build succeeds anyway, which is how the upload went silently unconfigured
+ * before this. They're a Sentry organization and project slug,
  * not a token, key, DSN, or internal hostname, so `docs/conventions/
  * security.md` § "Secrets Stay Out of the Tree" doesn't apply to them —
  * but they're still read from repository *variables* (`SENTRY_ORG`,

@@ -76,9 +76,11 @@ deployment.
 Alongside that secret, two repository **variables** — `SENTRY_ORG` and
 `SENTRY_PROJECT` — feed both pipelines' builds too, and gate the same
 source-map upload: `next.config.ts` passes them explicitly to
-`withSentryConfig`, and with either unset the upload is skipped the same
-way an absent `SENTRY_AUTH_TOKEN` degrades it, warned in the Actions log
-rather than discovered only when a stack trace won't symbolicate.
+`withSentryConfig`, which requires `SENTRY_PROJECT` unconditionally and
+`SENTRY_ORG` unless `SENTRY_AUTH_TOKEN` is org-scoped (`sntrys_`-prefixed).
+With a required one unset the upload is skipped the same way an absent
+`SENTRY_AUTH_TOKEN` degrades it, warned in the Actions log rather than
+discovered only when a stack trace won't symbolicate.
 
 A third repository **variable**, `NEXT_PUBLIC_SENTRY_DSN`, feeds both
 pipelines' builds as well. It is a variable rather than a secret because a
