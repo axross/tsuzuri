@@ -69,9 +69,18 @@ and the production deployment pipelines (see
 [docs/operations/preview-deployment.md](./docs/operations/preview-deployment.md)
 and
 [docs/operations/production-deployment.md](./docs/operations/production-deployment.md));
-and `SENTRY_AUTH_TOKEN`, which gates only the production build's client
-source-map upload — its absence degrades that build rather than blocking a
+and `SENTRY_AUTH_TOKEN`, which gates the client source-map upload in both
+pipelines' builds — its absence degrades a build rather than blocking a
 deployment.
+
+Alongside those secrets, a repository **variable** —
+`NEXT_PUBLIC_SENTRY_DSN` — feeds both pipelines' builds too. It is a
+variable rather than a secret because a DSN is public by design: it ships
+inside the browser bundle Next.js builds from it (see
+[docs/conventions/security.md](./docs/conventions/security.md)). Its
+absence does not fail a build either, but it does mean the deployed client
+reports nothing to Sentry; both pipelines print an `::warning::` in that
+case rather than leaving it to be discovered later.
 
 ## Development workflow
 

@@ -78,6 +78,26 @@ A fresh comment is posted per deploy — naming the deployed URL and the short
 SHA it was built from — rather than editing the previous one, so the thread
 reads as a history of what was deployed when.
 
+The Build step also carries this pull request's Sentry identity. `SENTRY_RELEASE`
+is set to `context.payload.pull_request.head.sha` — the same commit the
+deploy comment above names, not `github.sha`, which on a `pull_request`
+trigger is a merge commit rather than a commit on this branch — and reaches
+both halves of the deploy: `next.config.ts`'s explicit `release.name` picks
+it up for the client bundle and the source-map upload, and the templated
+`wrangler.preview.json`'s `vars` carries the same value to the deployed
+Worker (`worker.ts`'s `env.SENTRY_RELEASE`). One value reaching both is what
+lets a preview's client and server events correlate under one release in
+Sentry. `SENTRY_AUTH_TOKEN` (the same repository secret production's build
+uses) arms the source-map upload here too, so a preview's client errors
+symbolicate the same way production's do; its absence degrades the build
+rather than failing it. `NEXT_PUBLIC_SENTRY_DSN` (a repository *variable*,
+not a secret — see [docs/conventions/security.md](../conventions/security.md))
+is what lets the deployed client report to Sentry at all, since Next.js
+inlines it at build time; its absence is logged as an `::warning::` by a
+dedicated step immediately before the build runs, rather than failing it, so
+a missing or misspelled variable shows up in the Actions log instead of
+being discovered only when a preview's errors go unreported.
+
 Closing the pull request tears the Worker down. `wrangler delete` was
 measured (issue #70, and reproduced exactly by the 2026-08-23 measurement
 above) exiting non-zero after having already deleted the script, so its exit

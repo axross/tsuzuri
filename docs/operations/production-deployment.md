@@ -54,6 +54,27 @@ configured for this repository.
 (see `next.config.ts`); its absence degrades that build rather than blocking
 it, so it is not part of the preflight guard.
 
+The Build step also resolves `SENTRY_RELEASE` — a step immediately before it
+runs `git rev-parse HEAD` after the release step above, rather than trusting
+`github.sha`, because `@semantic-release/git` commits and pushes a version
+bump straight to this checkout's local branch when it cuts a release,
+advancing HEAD past the commit that triggered the dispatch. That resolved
+commit reaches both halves of the deploy: `next.config.ts`'s explicit
+`release.name` picks it up for the client bundle and the source-map upload,
+and the Deploy step appends it to the `opennextjs-cloudflare deploy`
+invocation as `--var SENTRY_RELEASE:<sha>` — forwarded straight through to
+the underlying `wrangler deploy` — so `worker.ts`'s `env.SENTRY_RELEASE`
+binding carries the same value. One value reaching both is what lets a
+production deploy's client and server events correlate under one release in
+Sentry. `NEXT_PUBLIC_SENTRY_DSN` (a repository *variable*, not a secret —
+see [docs/conventions/security.md](../conventions/security.md)) is also
+passed into the Build step, and is what lets the deployed client report to
+Sentry at all, since Next.js inlines it at build time; its absence is logged
+as an `::warning::` by a dedicated step immediately before the build runs,
+rather than failing it, so a missing or misspelled variable shows up in the
+Actions log instead of being discovered only when production's errors go
+unreported.
+
 ## The Operator's One-Time Setup
 
 Three things need doing by hand before this pipeline can do its job, none of
