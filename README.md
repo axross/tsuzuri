@@ -166,8 +166,9 @@ Lint, type-check, and the unit suite gate a merge, alongside a relative-link
 check and the `docs/` validators. The end-to-end suite does not gate; run it
 before opening a pull request that touches a rendered surface.
 
-| Check | Command |
-| ----- | ------- |
+| Purpose | Command |
+| ------- | ------- |
+| Dev server | `npm run dev` |
 | Format | `npm run format` |
 | Lint | `npm run lint` |
 | Type-check | `npm run typecheck` |
