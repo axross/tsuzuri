@@ -109,6 +109,20 @@ and reports nothing — no error, no warning, no network attempt — which is th
 deliberate inert-when-unconfigured shape `worker.ts`'s own comment states,
 not a bug in the pipeline.
 
+**4. Leave Cloudflare's Workers Builds GitHub integration disconnected from
+this repository.** Workers Builds can build and deploy a Worker straight from
+a GitHub push, entirely outside this workflow. Connecting it for the
+`tsuzuri` Worker opens a second path to production that ships on every
+qualifying push rather than waiting for an operator to dispatch this
+workflow — the exact thing the manual-`workflow_dispatch`-only decision
+above exists to rule out. It is a silent second path, not just an
+unwanted one: a Workers Builds deploy looks like any other deploy from the
+outside, and nothing in this repository records that it happened outside
+`workflow_dispatch`. Arming this pipeline includes checking, for the
+`tsuzuri` Worker in the Cloudflare dashboard, that no GitHub repository is
+connected under Workers Builds — done once, alongside the other setup here,
+and left alone afterward the same way.
+
 ## Staying Inside `0.x`
 
 Every release this project cuts stays inside `0.x` until the maintainer
