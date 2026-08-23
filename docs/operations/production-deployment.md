@@ -11,7 +11,18 @@ dispatch this workflow.
 
 ## What a Run Does
 
-Dispatching the workflow does two things, in order:
+The workflow enforces that it deploys the default branch's head rather than
+assuming it: immediately after preflight, a dedicated step compares the
+dispatched `github.ref` against `refs/heads/main` and, if they differ while
+the Cloudflare secrets are present, fails the job with `::error::` before
+Checkout runs — so a dispatch from any other branch is told loudly that
+nothing was built or deployed, rather than building and deploying that
+branch's code to the production Worker. The release half needs no equivalent
+check: `release.config.js`'s own `branches: ["main"]` already confines
+semantic-release to the default branch, and it exits 0 without releasing from
+any other one.
+
+Dispatching the workflow from the default branch does two things, in order:
 
 1. **Cuts a release with semantic-release**, from
    [`release.config.js`](../../release.config.js). It resolves the next

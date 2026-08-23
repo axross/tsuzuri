@@ -52,6 +52,22 @@ jobs:
             echo "armed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Only the deploy half needs this: the release half is already confined
+      # to the default branch by release.config.js's own `branches: ["main"]`
+      # (semantic-release exits 0 without releasing off that branch). Nothing
+      # here stops workflow_dispatch from being fired against any ref, and
+      # Checkout below takes whatever ref the operator selected — so without
+      # this check, a dispatch from a non-default branch would build and
+      # deploy *that branch's* code to the production Worker. Fails the job
+      # outright rather than silently skipping, so an operator who dispatched
+      # expecting a deployment is told rather than left with a green run that
+      # deployed nothing. See docs/operations/production-deployment.md.
+      - name: Verify the dispatch is from the default branch
+        if: steps.preflight.outputs.armed == 'true' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production deploy dispatched from ${{ github.ref }}, not refs/heads/main. Refusing to build or deploy this branch's code — re-dispatch from the default branch."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
