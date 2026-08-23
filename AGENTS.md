@@ -12,7 +12,7 @@
   What that costs, and the GitHub limits it runs into, is
   [docs/conventions/github-platform-limits.md](./docs/conventions/github-platform-limits.md).
 - Primary language: TypeScript. App framework: Next.js (App Router), hosted on
-  Vercel.
+  Cloudflare Workers via `@opennextjs/cloudflare`.
 - Tooling: npm for packages, Biome for both linting and formatting, Vitest for
   unit tests, Playwright for end-to-end tests.
 - [README.md](./README.md) is the authoritative record of this project's
