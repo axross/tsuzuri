@@ -68,10 +68,19 @@ type Env = {
  * `withSentry`'s options callback reads `env` per request rather than at
  * module load, so with `SENTRY_DSN` unset the Sentry client that gets
  * constructed is never given a DSN. Reading `@sentry/core`'s `Client`
- * constructor and `_isEnabled()` (neither vendor's documentation states this
- * directly) confirms that client then never opens a transport and every
- * capture call short-circuits on `_isEnabled()` before anything is sent — so
- * the Worker starts, serves requests, and makes no network call.
+ * (neither vendor's documentation states this directly) shows why that is
+ * enough: the constructor only builds a transport inside `if (this._dsn)`,
+ * so with no DSN `_transport` stays `undefined`, `_isEnabled()` — which is
+ * `enabled !== false && this._transport !== undefined` — is false, and
+ * `sendEnvelope` takes its `Transport disabled` branch instead of sending.
+ * The short-circuit is at the send, not at the capture: the capture call
+ * itself still runs and builds the event, and only the transmission is
+ * refused. Measured against a running Worker under `wrangler dev`, at the
+ * workerd level rather than from the SDK's own logs: with a DSN set, a
+ * throw produced a real `POST .../envelope/` to the ingest host answered
+ * `200`; with it unset, the same throw produced no outbound subrequest at
+ * all. Either way both routes still served — so the Worker starts, serves
+ * requests, and makes no network call.
  *
  * The options callback below sets no `release`: `@sentry/cloudflare`'s own
  * `getFinalOptions` (node_modules/@sentry/cloudflare/build/esm/options.js)
