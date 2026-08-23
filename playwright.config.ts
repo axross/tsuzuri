@@ -66,15 +66,25 @@ export default defineConfig({
 			},
 		},
 	],
-	// Owns the server lifecycle itself: build the production app, then start
-	// it, and poll the base URL until it is ready. Skipped when the suite is
-	// deliberately retargeted at an already-running deployment.
+	// Owns the server lifecycle itself: build the OpenNext output, then serve
+	// it through `wrangler dev` — the artifact that actually gets deployed,
+	// rather than `next start` — and poll the base URL until it is ready.
+	// `wrangler dev` runs in its default local mode (no `--remote`), so this
+	// needs no Cloudflare credentials; `--port` matches `baseURL` above.
+	// Skipped when the suite is deliberately retargeted at an
+	// already-running deployment (see `E2E_BASE_URL` above).
 	webServer: process.env.E2E_BASE_URL
 		? undefined
 		: {
-				command: "npm run build && npm run start",
+				command:
+					"npx opennextjs-cloudflare build && npx wrangler dev --port 3000",
 				url: baseURL,
 				reuseExistingServer: !process.env.CI,
-				timeout: 180_000,
+				// The OpenNext build (Turbopack + the Cloudflare bundling step) is
+				// slower than `next build`, which is what the previous timeout was
+				// sized for. Measured locally at ~22s for the build and ~3s for
+				// `wrangler dev` to report ready; raised well past that to absorb a
+				// slower CI runner.
+				timeout: 300_000,
 			},
 });
