@@ -175,10 +175,14 @@ jobs:
         if: steps.preflight.outputs.armed == 'true'
         run: npm install
 
-      # Issue #70 measured `wrangler delete` exiting non-zero after having
-      # already deleted the script, so its exit code is not trusted here —
-      # the next step verifies deletion by checking the account's Worker list
-      # instead, which is the actual pass/fail gate.
+      # `wrangler delete`'s exit code is not trusted here — it can exit
+      # non-zero on a deletion that already succeeded, because it enumerates
+      # Workers KV namespaces unconditionally on every deletion regardless of
+      # the token's scope or whether the Worker being deleted binds any KV
+      # namespace at all. See docs/operations/preview-deployment.md § "Arming
+      # It" for the measurement this is based on. The next step verifies
+      # deletion by checking the account's Worker list instead, which is the
+      # actual pass/fail gate.
       - name: Delete the Worker
         if: steps.preflight.outputs.armed == 'true'
         env:
